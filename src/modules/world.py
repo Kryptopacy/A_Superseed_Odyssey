@@ -1,11 +1,10 @@
 # src/modules/world.py
 import pygame
 import random
-import pytmx
-import os
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, \
     AREA_0_BACKGROUND, AREA_1_BACKGROUND, AREA_2_BACKGROUND, AREA_3_BACKGROUND, AREA_4_BACKGROUND, AREA_5_BACKGROUND, \
-    AREA_0_MAP, AREA_1_MAP, AREA_2_MAP, AREA_3_MAP, AREA_4_MAP, AREA_5_MAP, HUD_HEIGHT
+    HUD_HEIGHT, AREA_0_TILESHEET, AREA_1_TILESHEET, AREA_2_TILESHEET, AREA_3_TILESHEET, AREA_4_TILESHEET, AREA_5_TILESHEET, \
+    SWORD_SPRITE, TOKEN_SPRITE, CHECKPOINT_SPRITE, FRAGMENT_SPRITE
 from src.modules.enemies import Sapa, SplitterSapa, ProjectileSapa, ChaserSapa, DiagonalSapa, BossArea1, BossArea2, \
     BossArea3, BossArea4, BossArea5, Skuld
 from collections import deque
@@ -318,10 +317,13 @@ class Scene:
             self.npc = None
             self.minigame = None
             self.sword = None
+            self.sword_sprite = None
+            self.token_sprite = None
+            self.checkpoint_sprite = None
+            self.fragment_sprite = None
             self.boss = None
             self.exits = {}
             self.vitalik_freed = vitalik_freed
-            self.tmx_data = None
 
             # Load area-specific background
             background_paths = {
@@ -353,48 +355,73 @@ class Scene:
             self.grid = self.maze.grid
             self.width = self.maze.width
             self.height = self.maze.height
+            self.entry = self.maze.entry
+            self.exit = self.maze.exit
 
-            # Load Tiled map for visuals
-            map_paths = {
-                0: AREA_0_MAP,
-                1: AREA_1_MAP,
-                2: AREA_2_MAP,
-                3: AREA_3_MAP,
-                4: AREA_4_MAP,
-                5: AREA_5_MAP
+            # Load area-specific tilesheet
+            tilesheet_paths = {
+                0: AREA_0_TILESHEET,
+                1: AREA_1_TILESHEET,
+                2: AREA_2_TILESHEET,
+                3: AREA_3_TILESHEET,
+                4: AREA_4_TILESHEET,
+                5: AREA_5_TILESHEET
             }
-            map_path = map_paths.get(area_id, None)
-            self.tmx_data = None
+            tilesheet_path = tilesheet_paths.get(area_id, None)
+            self.wall_tile = None
+            self.floor_tile = None
             try:
-                print(f"Attempting to load Tiled map from: {map_path}")
-                if map_path and os.path.exists(map_path):
-                    self.tmx_data = pytmx.load_pygame(map_path)
-                    # Validate Tiled map dimensions
-                    if self.tmx_data.width != self.width or self.tmx_data.height != self.height:
-                        raise ValueError(f"Tiled map dimensions ({self.tmx_data.width}x{self.tmx_data.height}) do not match maze dimensions ({self.width}x{self.height}).")
-                else:
-                    raise FileNotFoundError("Tiled map file not found.")
-            except (pygame.error, FileNotFoundError, ValueError, Exception) as e:
-                print(f"Failed to load Tiled map at {map_path}. Error: {e}. Will use procedural rendering.")
+                print(f"Attempting to load tilesheet from: {tilesheet_path}")
+                if not os.path.exists(tilesheet_path):
+                    raise FileNotFoundError(f"File not found: {tilesheet_path}")
+                tilesheet = pygame.image.load(tilesheet_path).convert_alpha()
+                # Extract wall tile (at 0,0)
+                self.wall_tile = tilesheet.subsurface(pygame.Rect(0, 0, 40, 40))
+                # Extract floor tile (at 40,0)
+                self.floor_tile = tilesheet.subsurface(pygame.Rect(40, 0, 40, 40))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load tilesheet at {tilesheet_path}. Error: {e}. Will use procedural rendering.")
 
-            # Select random entry and exit from possible points
-            possible_entries = []
-            possible_exits = []
-            if self.tmx_data:
-                for obj in self.tmx_data.objects:
-                    if obj.name and "Entry" in obj.name:
-                        possible_entries.append((int(obj.x // TILE_SIZE), int(obj.y // TILE_SIZE)))
-                    elif obj.name and "Exit" in obj.name:
-                        possible_exits.append((int(obj.x // TILE_SIZE), int(obj.y // TILE_SIZE)))
-            if possible_entries and possible_exits:
-                self.entry = random.choice(possible_entries)
-                self.exit = random.choice([e for e in possible_exits if e != self.entry])
-            else:
-                self.entry = self.maze.entry
-                self.exit = self.maze.exit
-                # Ensure entry and exit are open
-                self.grid[self.entry[1]][self.entry[0]] = 0
-                self.grid[self.exit[1]][self.exit[0]] = 0
+            # Load sprites for sword, tokens, checkpoints, fragments
+            try:
+                print(f"Attempting to load sword sprite from: {SWORD_SPRITE}")
+                if not os.path.exists(SWORD_SPRITE):
+                    raise FileNotFoundError(f"File not found: {SWORD_SPRITE}")
+                self.sword_sprite = pygame.image.load(SWORD_SPRITE).convert_alpha()
+                self.sword_sprite = pygame.transform.scale(self.sword_sprite, (TILE_SIZE, TILE_SIZE))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load sword sprite at {SWORD_SPRITE}. Error: {e}. Using placeholder.")
+                self.sword_sprite = None
+
+            try:
+                print(f"Attempting to load token sprite from: {TOKEN_SPRITE}")
+                if not os.path.exists(TOKEN_SPRITE):
+                    raise FileNotFoundError(f"File not found: {TOKEN_SPRITE}")
+                self.token_sprite = pygame.image.load(TOKEN_SPRITE).convert_alpha()
+                self.token_sprite = pygame.transform.scale(self.token_sprite, (TILE_SIZE, TILE_SIZE))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load token sprite at {TOKEN_SPRITE}. Error: {e}. Using placeholder.")
+                self.token_sprite = None
+
+            try:
+                print(f"Attempting to load checkpoint sprite from: {CHECKPOINT_SPRITE}")
+                if not os.path.exists(CHECKPOINT_SPRITE):
+                    raise FileNotFoundError(f"File not found: {CHECKPOINT_SPRITE}")
+                self.checkpoint_sprite = pygame.image.load(CHECKPOINT_SPRITE).convert_alpha()
+                self.checkpoint_sprite = pygame.transform.scale(self.checkpoint_sprite, (TILE_SIZE, TILE_SIZE))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load checkpoint sprite at {CHECKPOINT_SPRITE}. Error: {e}. Using placeholder.")
+                self.checkpoint_sprite = None
+
+            try:
+                print(f"Attempting to load fragment sprite from: {FRAGMENT_SPRITE}")
+                if not os.path.exists(FRAGMENT_SPRITE):
+                    raise FileNotFoundError(f"File not found: {FRAGMENT_SPRITE}")
+                self.fragment_sprite = pygame.image.load(FRAGMENT_SPRITE).convert_alpha()
+                self.fragment_sprite = pygame.transform.scale(self.fragment_sprite, (TILE_SIZE, TILE_SIZE))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load fragment sprite at {FRAGMENT_SPRITE}. Error: {e}. Using placeholder.")
+                self.fragment_sprite = None
 
             self.setup_exits()
             self.place_elements()
@@ -548,14 +575,15 @@ class Scene:
             # Draw the area-specific background
             screen.blit(self.background, (0, 0))
 
-            if self.tmx_data:
-                # Map procedural grid to Tiled tiles
+            # Draw the maze using tilesheet
+            if self.wall_tile and self.floor_tile:
                 for y in range(self.height):
                     for x in range(self.width):
-                        tile_id = 1 if self.grid[y][x] == 1 else 2  # 1 for wall, 2 for floor (adjust based on your tileset)
-                        tile = self.tmx_data.get_tile_image_by_id(tile_id)
-                        if tile:
-                            screen.blit(tile, (x * TILE_SIZE, y * TILE_SIZE + HUD_HEIGHT))
+                        screen_y = HUD_HEIGHT + y * TILE_SIZE
+                        if self.grid[y][x] == 1:
+                            screen.blit(self.wall_tile, (x * TILE_SIZE, screen_y))
+                        else:
+                            screen.blit(self.floor_tile, (x * TILE_SIZE, screen_y))
             else:
                 # Fallback to procedural rendering
                 for y in range(self.height):
@@ -564,14 +592,27 @@ class Scene:
                             screen_y = HUD_HEIGHT + y * TILE_SIZE
                             pygame.draw.rect(screen, (100, 100, 100), (x * TILE_SIZE, screen_y, TILE_SIZE, TILE_SIZE))
 
+            # Draw tokens, checkpoints, sword, and fragments with sprites
             for token in self.tokens:
-                pygame.draw.rect(screen, (0, 255, 255), (token.x, token.y, token.width, token.height))
+                if self.token_sprite:
+                    screen.blit(self.token_sprite, (token.x, token.y))
+                else:
+                    pygame.draw.rect(screen, (0, 255, 255), (token.x, token.y, token.width, token.height))
             for checkpoint in self.checkpoints:
-                pygame.draw.rect(screen, (0, 255, 0), (checkpoint.x, checkpoint.y, checkpoint.width, checkpoint.height))
+                if self.checkpoint_sprite:
+                    screen.blit(self.checkpoint_sprite, (checkpoint.x, checkpoint.y))
+                else:
+                    pygame.draw.rect(screen, (0, 255, 0), (checkpoint.x, checkpoint.y, checkpoint.width, checkpoint.height))
             if self.sword:
-                pygame.draw.rect(screen, (255, 255, 0), (self.sword.x, self.sword.y, self.sword.width, self.sword.height))
+                if self.sword_sprite:
+                    screen.blit(self.sword_sprite, (self.sword.x, self.sword.y))
+                else:
+                    pygame.draw.rect(screen, (255, 255, 0), (self.sword.x, self.sword.y, self.sword.width, self.sword.height))
             for fragment in self.fragments:
-                pygame.draw.rect(screen, (255, 165, 0), (fragment.x, fragment.y, fragment.width, fragment.height))
+                if self.fragment_sprite:
+                    screen.blit(self.fragment_sprite, (fragment.x, fragment.y))
+                else:
+                    pygame.draw.rect(screen, (255, 165, 0), (fragment.x, fragment.y, fragment.width, fragment.height))
             print("Scene drawn successfully.")
         except Exception as e:
             print(f"Error in Scene.draw: {e}")

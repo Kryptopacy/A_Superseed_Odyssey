@@ -2,7 +2,6 @@
 import pygame
 import random
 import math
-import os
 from src.config import TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, FPS, SAPA_SPRITE, SPLITTER_SAPA_SPRITE, \
     PROJECTILE_SAPA_SPRITE, CHASER_SAPA_SPRITE, DIAGONAL_SAPA_SPRITE, BOSS_1_SPRITE, BOSS_2_SPRITE, \
     BOSS_3_SPRITE, BOSS_4_SPRITE, BOSS_5_SPRITE, SKULD_SPRITE, HUD_HEIGHT
@@ -17,13 +16,12 @@ class Enemy:
         self.hp = hp
         self.rect = self.place_in_maze()
         try:
-            if os.path.exists(sprite_path):
-                self.image = pygame.image.load(sprite_path).convert_alpha()
-                self.image = pygame.transform.scale(self.image, (self.width, self.height))
-            else:
-                self.image = pygame.Surface((self.width, self.height))
-                self.image.fill((150, 0, 0))
-        except Exception as e:
+            print(f"Attempting to load sprite from: {sprite_path}")
+            if not os.path.exists(sprite_path):
+                raise FileNotFoundError(f"File not found: {sprite_path}")
+            self.image = pygame.image.load(sprite_path).convert_alpha()
+            self.image = pygame.transform.scale(self.image, (self.width, self.height))
+        except (pygame.error, FileNotFoundError, Exception) as e:
             print(f"Failed to load sprite {sprite_path}: {e}. Using placeholder.")
             self.image = pygame.Surface((self.width, self.height))
             self.image.fill((150, 0, 0))
