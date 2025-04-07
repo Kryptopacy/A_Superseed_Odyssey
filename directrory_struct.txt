@@ -1,0 +1,35 @@
+SuperseedOdyssey/
+├── assets/
+│   ├── images/
+│   │   ├── player/           # Sprites for male/female character options
+│   │   ├── sapa/             # Different Sapa enemy types
+│   │   ├── items/            # Supercollateral tokens, Sword of Solvency, etc.
+│   │   ├── ui/               # Dialogue boxes, buttons, health bars
+│   │   └── backgrounds/      # Maze rooms, Krypto world scenes
+│   ├── sounds/
+│   │   ├── effects/          # Attack, pickup, infection sounds
+│   │   └── music/            # Background tracks
+│   └── fonts/                # Custom fonts for UI/dialogue
+├── src/
+│   ├── modules/              # Individual game mechanics
+│   │   ├── player.py         # Player movement, stats, attacks
+│   │   ├── enemies.py        # Sapa types, AI, attack patterns
+│   │   ├── combat.py         # Melee/ranged mechanics, cooldowns
+│   │   ├── inventory.py      # Supercollateral, Sword of Solvency, Ring of Optimism
+│   │   ├── maze.py           # Maze generation, room transitions
+│   │   ├── ui.py             # Dialogue boxes, menus, text wrapping
+│   │   ├── minigames/        # Separate scripts for each minigame
+│   │   │   ├── anagram.py
+│   │   │   ├── memory_sequence.py
+│   │   │   ├── color_match.py
+│   │   │   ├── hash_dash.py
+│   │   │   ├── collateral_lock.py
+│   │   │   └── gas_fee_gauntlet.py
+│   │   ├── npcs.py           # Vitalik, vendors, lore NPCs
+│   │   └── world.py          # Krypto world progression, fragments
+│   ├── config.py             # Game constants (screen size, colors, etc.)
+│   ├── utils.py              # Helper functions (collision, randomization)
+│   └── main.py               # Main game loop, initialization
+├── tests/                    # Unit tests for modules (optional)
+├── requirements.txt          # Python dependencies (e.g., pygame)
+└── README.md                 # Project overview
