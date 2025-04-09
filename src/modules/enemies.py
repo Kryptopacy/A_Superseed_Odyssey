@@ -2,18 +2,22 @@
 import pygame
 import random
 import math
+import os
 from src.config import TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, FPS, SAPA_SPRITE, SPLITTER_SAPA_SPRITE, \
     PROJECTILE_SAPA_SPRITE, CHASER_SAPA_SPRITE, DIAGONAL_SAPA_SPRITE, BOSS_1_SPRITE, BOSS_2_SPRITE, \
     BOSS_3_SPRITE, BOSS_4_SPRITE, BOSS_5_SPRITE, SKULD_SPRITE, HUD_HEIGHT
 
 class Enemy:
-    def __init__(self, scene, name, sprite_path, width=TILE_SIZE, height=TILE_SIZE, speed=2, hp=10):
+    def __init__(self, scene, name, sprite_path, player_level, width=TILE_SIZE, height=TILE_SIZE, speed=2, base_hp=10):
         self.scene = scene
         self.name = name
         self.width = width
         self.height = height
         self.speed = speed
-        self.hp = hp
+        # Scale HP and damage with player level
+        self.hp = int(base_hp * (1 + player_level * 0.2))  # 20% increase per player level
+        self.damage = int(2 * (1 + player_level * 0.1))  # 10% increase per player level
+        self.level = player_level  # Enemy level matches player level
         self.rect = self.place_in_maze()
         try:
             print(f"Attempting to load sprite from: {sprite_path}")
@@ -63,7 +67,7 @@ class Enemy:
             self.attack_cooldown -= 1
             return None
         if self.rect.colliderect(player.rect):
-            player.take_damage(2)
+            player.take_damage(self.damage)
             self.attack_cooldown = self.attack_cooldown_max
         return None
 
@@ -86,12 +90,12 @@ class Enemy:
             screen.blit(self.image, self.rect)
 
 class Sapa(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Sapa", SAPA_SPRITE)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Sapa", SAPA_SPRITE, player_level)
 
 class SplitterSapa(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Splitter Sapa", SPLITTER_SAPA_SPRITE, hp=10)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Splitter Sapa", SPLITTER_SAPA_SPRITE, player_level, base_hp=10)
         self.split_count = 0
 
     def take_damage(self, damage):
@@ -99,8 +103,8 @@ class SplitterSapa(Enemy):
         self.hit_timer = 10
         if self.hp <= 0 and self.split_count < 2:
             self.split_count += 1
-            new_sapa1 = Sapa(self.scene)
-            new_sapa2 = Sapa(self.scene)
+            new_sapa1 = Sapa(self.scene, self.level)
+            new_sapa2 = Sapa(self.scene, self.level)
             new_sapa1.rect.x = self.rect.x + TILE_SIZE
             new_sapa1.rect.y = self.rect.y
             new_sapa2.rect.x = self.rect.x - TILE_SIZE
@@ -109,8 +113,8 @@ class SplitterSapa(Enemy):
         return [] if self.hp <= 0 else None
 
 class ProjectileSapa(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Projectile Sapa", PROJECTILE_SAPA_SPRITE)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Projectile Sapa", PROJECTILE_SAPA_SPRITE, player_level)
         self.projectile_cooldown = 0
         self.projectile_cooldown_max = FPS * 3
 
@@ -130,8 +134,8 @@ class ProjectileSapa(Enemy):
         return None
 
 class ChaserSapa(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Chaser Sapa", CHASER_SAPA_SPRITE)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Chaser Sapa", CHASER_SAPA_SPRITE, player_level)
 
     def move(self, maze, player):
         new_rect = self.rect.copy()
@@ -150,8 +154,8 @@ class ChaserSapa(Enemy):
             self.direction = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
 
 class DiagonalSapa(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Diagonal Sapa", DIAGONAL_SAPA_SPRITE)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Diagonal Sapa", DIAGONAL_SAPA_SPRITE, player_level)
         self.direction = random.choice([(1, 1), (-1, -1), (1, -1), (-1, 1)])
 
     def move(self, maze, player):
@@ -166,8 +170,8 @@ class DiagonalSapa(Enemy):
             self.direction = random.choice([(1, 1), (-1, -1), (1, -1), (-1, 1)])
 
 class BossArea1(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Boss Area 1", BOSS_1_SPRITE, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, hp=50)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Boss Area 1", BOSS_1_SPRITE, player_level, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, base_hp=50)
         self.projectile_cooldown = 0
         self.projectile_cooldown_max = FPS * 2
 
@@ -187,8 +191,8 @@ class BossArea1(Enemy):
         return None
 
 class BossArea2(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Boss Area 2", BOSS_2_SPRITE, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, hp=50)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Boss Area 2", BOSS_2_SPRITE, player_level, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, base_hp=50)
         self.sweep_cooldown = 0
         self.sweep_cooldown_max = FPS * 5
 
@@ -202,8 +206,8 @@ class BossArea2(Enemy):
         return (sweep_rect, 0, 0)
 
 class BossArea3(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Boss Area 3", BOSS_3_SPRITE, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, hp=50)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Boss Area 3", BOSS_3_SPRITE, player_level, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, base_hp=50)
         self.minion_cooldown = 0
         self.minion_cooldown_max = FPS * 10
 
@@ -213,8 +217,8 @@ class BossArea3(Enemy):
             return super().attack(player)
         # Summon two Sapas
         self.minion_cooldown = self.minion_cooldown_max
-        minion1 = Sapa(self.scene)
-        minion2 = Sapa(self.scene)
+        minion1 = Sapa(self.scene, self.level)
+        minion2 = Sapa(self.scene, self.level)
         minion1.rect.x = self.rect.x + TILE_SIZE * 2
         minion1.rect.y = self.rect.y
         minion2.rect.x = self.rect.x - TILE_SIZE * 2
@@ -222,8 +226,8 @@ class BossArea3(Enemy):
         return [minion1, minion2]
 
 class BossArea4(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Boss Area 4", BOSS_4_SPRITE, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, hp=50)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Boss Area 4", BOSS_4_SPRITE, player_level, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, base_hp=50)
         self.dash_cooldown = 0
         self.dash_cooldown_max = FPS * 3
         self.dashing = False
@@ -247,8 +251,8 @@ class BossArea4(Enemy):
             self.dashing = True
 
 class BossArea5(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Boss Area 5", BOSS_5_SPRITE, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, hp=50)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Boss Area 5", BOSS_5_SPRITE, player_level, width=TILE_SIZE * 2, height=TILE_SIZE * 2, speed=2, base_hp=50)
         self.circle_cooldown = 0
         self.circle_cooldown_max = FPS * 4
 
@@ -268,8 +272,8 @@ class BossArea5(Enemy):
         return projectiles
 
 class Skuld(Enemy):
-    def __init__(self, scene):
-        super().__init__(scene, "Skuld", SKULD_SPRITE, width=TILE_SIZE * 3, height=TILE_SIZE * 3, speed=2, hp=100)
+    def __init__(self, scene, player_level):
+        super().__init__(scene, "Skuld", SKULD_SPRITE, player_level, width=TILE_SIZE * 3, height=TILE_SIZE * 3, speed=2, base_hp=100)
         self.phase = 1
         self.projectile_cooldown = 0
         self.projectile_cooldown_max = FPS * 2
@@ -297,8 +301,8 @@ class Skuld(Enemy):
             if self.minion_cooldown > 0:
                 self.minion_cooldown -= 1
             else:
-                minion1 = Sapa(self.scene)
-                minion2 = Sapa(self.scene)
+                minion1 = Sapa(self.scene, self.level)
+                minion2 = Sapa(self.scene, self.level)
                 minion1.rect.x = self.rect.x + TILE_SIZE * 2
                 minion1.rect.y = self.rect.y
                 minion2.rect.x = self.rect.x - TILE_SIZE * 2

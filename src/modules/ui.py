@@ -62,17 +62,29 @@ class DialogueBox:
             screen.blit(speaker_shadow, (box_x + 12, box_y + 12))
             screen.blit(speaker_text, (box_x + 10, box_y + 10))
             for i, wrapped_line in enumerate(wrapped_lines):
-                text_surface = self.font.render(wrapped_line, True, WHITE)
-                text_shadow = self.font.render(wrapped_line, True, BLACK)
-                screen.blit(text_shadow, (box_x + speaker_text.get_width() + 12, box_y + 12 + i * 40))
-                screen.blit(text_surface, (box_x + speaker_text.get_width() + 10, box_y + 10 + i * 40))
+                # Highlight action keys in gold
+                parts = wrapped_line.split()
+                x_offset = speaker_text.get_width() + 10
+                for part in parts:
+                    color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5") else WHITE
+                    text_surface = self.font.render(part + " ", True, color)
+                    text_shadow = self.font.render(part + " ", True, BLACK)
+                    screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
+                    screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
+                    x_offset += text_surface.get_width()
         else:
             wrapped_lines = wrap_text(line, self.font, self.max_width)
             for i, wrapped_line in enumerate(wrapped_lines):
-                text_surface = self.font.render(wrapped_line, True, WHITE)
-                text_shadow = self.font.render(wrapped_line, True, BLACK)
-                screen.blit(text_shadow, (box_x + 12, box_y + 12 + i * 40))
-                screen.blit(text_surface, (box_x + 10, box_y + 10 + i * 40))
+                # Highlight action keys in gold
+                parts = wrapped_line.split()
+                x_offset = 10
+                for part in parts:
+                    color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5") else WHITE
+                    text_surface = self.font.render(part + " ", True, color)
+                    text_shadow = self.font.render(part + " ", True, BLACK)
+                    screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
+                    screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
+                    x_offset += text_surface.get_width()
 
         # Render prompt externally
         if self.show_prompt:
@@ -108,7 +120,7 @@ def show_tutorial(screen, dialogue_box, ui_background):
         dialogue_box.draw(screen)
         pygame.display.flip()
 
-def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints):
+def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints, music_volume, sfx_volume):
     print("Showing pause menu...")
     try:
         font = pygame.font.SysFont("Arial", 36)
@@ -116,13 +128,16 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
         print("Failed to load font 'Arial'. Using default font.")
         font = pygame.font.Font(None, 36)
 
-    options = ["Resume", "Tutorial", "Settings", "Restart", "Quit"]
+    options = ["Resume", "Tutorial", "Toggle Minimap", "Toggle Easy Mode", "Restart", "Adjust Sound", "Save Game", "Load Game", "Quit"]
     settings_options = ["Toggle Easy Mode", "Back"]
     restart_options = ["Restart from Checkpoint", "Restart Area", "Back"]
+    sound_options = ["Music Volume Up", "Music Volume Down", "SFX Volume Up", "SFX Volume Down", "Back"]
     selected = 0
     in_settings = False
     in_restart = False
+    in_sound = False
     running = True
+    show_minimap = False
 
     while running:
         current_options = options
@@ -130,8 +145,13 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
             current_options = settings_options
         elif in_restart:
             current_options = restart_options
+        elif in_sound:
+            current_options = sound_options
 
         lines = []
+        if in_sound:
+            lines.append(f"Music Volume: {int(music_volume * 100)}%")
+            lines.append(f"SFX Volume: {int(sfx_volume * 100)}%")
         for i, option in enumerate(current_options):
             prefix = "> " if i == selected else "  "
             if in_settings and option == "Toggle Easy Mode":
@@ -180,17 +200,69 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                         elif current_options[selected] == "Back":
                             in_restart = False
                             selected = 0
+                    elif in_sound:
+                        if current_options[selected] == "Music Volume Up":
+                            music_volume = min(1.0, music_volume + 0.1)
+                            pygame.mixer.music.set_volume(music_volume)
+                        elif current_options[selected] == "Music Volume Down":
+                            music_volume = max(0.0, music_volume - 0.1)
+                            pygame.mixer.music.set_volume(music_volume)
+                        elif current_options[selected] == "SFX Volume Up":
+                            sfx_volume = min(1.0, sfx_volume + 0.1)
+                        elif current_options[selected] == "SFX Volume Down":
+                            sfx_volume = max(0.0, sfx_volume - 0.1)
+                        elif current_options[selected] == "Back":
+                            in_sound = False
+                            selected = 0
                     else:
                         if current_options[selected] == "Resume":
                             running = False
                         elif current_options[selected] == "Tutorial":
                             show_tutorial(screen, dialogue_box, ui_background)
-                        elif current_options[selected] == "Settings":
+                        elif current_options[selected] == "Toggle Minimap":
+                            show_minimap = not show_minimap
+                            dialogue_box.show([f"Minimap {'enabled' if show_minimap else 'disabled'}!"])
+                        elif current_options[selected] == "Toggle Easy Mode":
                             in_settings = True
                             selected = 0
                         elif current_options[selected] == "Restart":
                             in_restart = True
                             selected = 0
+                        elif current_options[selected] == "Adjust Sound":
+                            in_sound = True
+                            selected = 0
+                        elif current_options[selected] == "Save Game":
+                            save_game(player, world, vitalik_freed, choice_made, self_save_choice_made, vitalik)
+                            dialogue_box.show(["Game saved successfully!"])
+                        elif current_options[selected] == "Load Game":
+                            game_state = load_game()
+                            if game_state:
+                                player.rect.x, player.rect.y = game_state['player']['rect']
+                                player.hp = game_state['player']['hp']
+                                player.infection_level = game_state['player']['infection_level']
+                                player.attack_power = game_state['player']['attack_power']
+                                player.ranged_attacks = game_state['player']['ranged_attacks']
+                                player.optimism_ring_duration = game_state['player']['optimism_ring_duration']
+                                player.optimism_ring_timer = game_state['player']['optimism_ring_timer']
+                                player.easy_mode = game_state['player']['easy_mode']
+                                player.inventory.supercollateral = game_state['player']['inventory']['supercollateral']
+                                player.inventory.fragments = game_state['player']['inventory']['fragments']
+                                player.inventory.has_sword = game_state['player']['inventory']['has_sword']
+                                world.current_area = game_state['world']['current_area']
+                                world.current_scene = game_state['world']['current_scene']
+                                vitalik_freed = game_state['vitalik_freed']
+                                choice_made = game_state['choice_made']
+                                self_save_choice_made = game_state['self_save_choice_made']
+                                if game_state['vitalik']['rect']:
+                                    vitalik = NPC(current_scene, is_vitalik=True)
+                                    vitalik.is_freed = game_state['vitalik']['is_freed']
+                                    vitalik.following = game_state['vitalik']['following']
+                                    vitalik.invulnerable = game_state['vitalik']['invulnerable']
+                                    vitalik.rect.x, vitalik.rect.y = game_state['vitalik']['rect']
+                                    current_scene.npc = vitalik
+                                dialogue_box.show(["Game loaded successfully!"])
+                            else:
+                                dialogue_box.show(["No saved game found!"])
                         elif current_options[selected] == "Quit":
                             pygame.quit()
                             sys.exit()
@@ -198,6 +270,8 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
         pygame.display.flip()
+
+    return show_minimap
 
 def prompt_easy_mode(screen, dialogue_box, player, ui_background):
     print("Prompting easy mode switch...")

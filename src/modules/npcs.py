@@ -5,13 +5,13 @@ import sys
 from src.config import TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, FPS, UI_BACKGROUND
 
 class NPC:
-    def __init__(self, scene, is_vendor=False, is_crypto_scholar=False):
+    def __init__(self, scene, is_vitalik=False, is_vendor=False, is_crypto_scholar=False):
         print("Entering NPC.__init__...")
         try:
             self.scene = scene
+            self.is_vitalik = is_vitalik
             self.is_vendor = is_vendor
             self.is_crypto_scholar = is_crypto_scholar
-            self.is_vitalik = False
             self.is_freed = False if self.is_vitalik else True
             self.following = False
             self.invulnerable = True
@@ -35,17 +35,30 @@ class NPC:
         attempt = 0
         try:
             while attempt < max_attempts:
-                x = random.randint(0, MAZE_WIDTH - 1) * TILE_SIZE
-                y = random.randint(0, MAZE_HEIGHT - 1) * TILE_SIZE
+                # Find a position near a wall to avoid Sapa paths
+                x = random.randint(1, MAZE_WIDTH - 2) * TILE_SIZE
+                y = random.randint(1, MAZE_HEIGHT - 2) * TILE_SIZE
                 rect = pygame.Rect(x, y, self.width, self.height)
                 entry_x, entry_y = self.scene.maze.entry
                 exit_x, exit_y = self.scene.maze.exit
                 entry_distance = ((x - entry_x * TILE_SIZE) ** 2 + (y - entry_y * TILE_SIZE) ** 2) ** 0.5
                 exit_distance = ((x - exit_x * TILE_SIZE) ** 2 + (y - exit_y * TILE_SIZE) ** 2) ** 0.5
-                if not self.scene.maze.collides(rect) and entry_distance > 100 and exit_distance > 100:
+                # Check if the position is near a wall (at least one adjacent tile is a wall)
+                grid_x = x // TILE_SIZE
+                grid_y = y // TILE_SIZE
+                near_wall = False
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    nx, ny = grid_x + dx, grid_y + dy
+                    if 0 <= nx < MAZE_WIDTH and 0 <= ny < MAZE_HEIGHT and self.scene.maze.grid[ny][nx] == 1:
+                        near_wall = True
+                        break
+                if (not self.scene.maze.collides(rect) and
+                    entry_distance > 100 and
+                    exit_distance > 100 and
+                    near_wall):
                     player_x, player_y = self.scene.player.rect.x, self.scene.player.rect.y
                     player_distance = ((x - player_x) ** 2 + (y - player_y) ** 2) ** 0.5
-                    if player_distance > 200:  # Ensure NPC spawns at least 200 pixels away
+                    if player_distance > 200:  # Ensure NPC spawns at least 200 pixels away from player
                         print("NPC placed successfully.")
                         return rect
                 attempt += 1
@@ -76,17 +89,18 @@ class NPC:
             if not self.scene.maze.collides(new_rect):
                 self.rect = new_rect
 
-            # Vitalik occasionally shares all-knowing facts
+            # Vitalik occasionally shares lore-based facts
             if self.is_vitalik and self.following:
                 self.vitalik_comment_timer += 1
                 if self.vitalik_comment_timer >= self.vitalik_comment_interval:
                     vitalik_facts = [
-                        "In ancient times, Krypto’s rivers flowed with light, not water—a gift from the Superseed.",
-                        "Seisan’s chaos is eternal, but so is the hope within the Superseed’s fragments.",
-                        "The Ethereum chain once united all of Krypto’s tribes under a single banner of trust.",
-                        "Optimism’s light is a faint echo of the Superseed’s glory—yet it endures.",
-                        "I have seen worlds beyond Krypto where chaos and order dance in harmony.",
-                        "The MEV gang once sought power through chaos, much like Skuld did."
+                        f"The Superseed wasn’t just a source of light—it was Krypto’s heart, binding all life together.",
+                        f"Skuld wasn’t always evil; he was once a guardian, corrupted by his own ambition.",
+                        f"Skuld’s fall began when he sought immortality, a gift the Superseed could never grant.",
+                        f"The people of KRYPTO that the ElPee, live and die protecting, disregarded them as a myth. Skuld was fed up",
+                        f"The ElPee’s final stand at Seisan Spires was a tragedy—the entire clan fell to protect the fragments.",
+                        f"Krypto’s slums were once a thriving market, before the Sapa curse turned it into a wasteland.",
+                        f"The Sword of Solvency was forged by the ElPee to channel the Superseed’s power against Seisan."
                     ]
                     dialogue_box.show([random.choice(vitalik_facts), "Press SPACE to continue, or ESC to close."])
                     self.vitalik_comment_timer = 0
@@ -130,8 +144,8 @@ class NPC:
 
     def generate_upgrades(self):
         return {
-            "Optimism Ring Duration": {"description": "Extend Optimism Ring duration by 5s", "cost": 10, "value": 5},
-            "Attack Power": {"description": "Increase attack power by 5", "cost": 15, "value": 5},
+            "Optimism Ring Fill Rate": {"description": "Increase Optimism Ring fill rate by 0.1%", "cost": 10, "value": 0.1},
+            "Attack Power": {"description": "Increase attack power by 2", "cost": 15, "value": 2},
             "Ranged Attacks": {"description": "Add 3 ranged attacks", "cost": 20, "value": 3}
         }
 

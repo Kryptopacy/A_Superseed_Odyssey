@@ -6,7 +6,8 @@ import os
 from src.modules.player import Player
 from src.modules.cutscenes import play_intro_cutscene, play_area_cutscene
 from src.modules.checkpoint import CheckpointSystem
-from src.modules.enemies import Sapa, SplitterSapa, ProjectileSapa, ChaserSapa, DiagonalSapa
+from src.modules.enemies import Sapa, SplitterSapa, ProjectileSapa, ChaserSapa, DiagonalSapa, BossArea1, BossArea2, \
+    BossArea3, BossArea4, BossArea5, Skuld
 from src.modules.combat import CombatSystem
 from src.modules.npcs import NPC, vitalik_cutscene, vitalik_choice
 from src.modules.minigames.hash_dash import play_hash_dash
@@ -17,6 +18,7 @@ from src.modules.minigames.memory_sequence import play_memory_sequence
 from src.modules.minigames.color_match import play_color_match
 from src.modules.ui import DialogueBox, show_tutorial, show_pause_menu, prompt_easy_mode
 from src.modules.world import World
+from src.modules.game_state import save_game, load_game
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE, WHITE, CRITICAL_TINT, MORNING_GLORY, BLACK, \
     GOLD, HUD_HEART_ICON, HUD_COIN_ICON, HUD_VIRUS_ICON, HUD_RING_ICON, MALE_SPRITE, FEMALE_SPRITE, DEFAULT_FONT, \
     UI_BACKGROUND, MAZE_WIDTH, MAZE_HEIGHT, SOUND_GAME_MUSIC, SOUND_CUTSCENE_MUSIC, HUD_HEIGHT
@@ -229,13 +231,12 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
     while running:
         lines = ["Vendor: Welcome to my shop!", f"Vendor: Supercollateral: {player.inventory.supercollateral}"]
         for i, option in enumerate(options):
-            prefix = "> " if i == selected else "  "
             if option != "Exit":
                 upgrade = vendor.upgrades[option]
-                lines.append(f"{prefix}{option}: {upgrade['description']} (Cost: {upgrade['cost']})")
+                lines.append(f"{i+1}: {option}: {upgrade['description']} (Cost: {upgrade['cost']}) - Press {i+1} to buy")
             else:
-                lines.append(f"{prefix}{option}")
-        dialogue_box.show(lines)
+                lines.append(f"{len(options)}: Exit - Press {len(options)} to leave or ESC to close")
+        dialogue_box.show(lines, show_prompt=False)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -243,27 +244,24 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
                 return False
             if event.type == pygame.KEYDOWN:
                 print(f"Key pressed in vendor_interaction: {event.key}")
-                if event.key == pygame.K_SPACE and dialogue_box.active:
-                    dialogue_box.next_line()
-                elif event.key == pygame.K_UP and not dialogue_box.active:
-                    selected = (selected - 1) % len(options)
-                elif event.key == pygame.K_DOWN and not dialogue_box.active:
-                    selected = (selected + 1) % len(options)
-                elif event.key == pygame.K_RETURN and not dialogue_box.active:
-                    if options[selected] == "Exit":
-                        running = False
-                    else:
-                        upgrade = vendor.upgrades[options[selected]]
-                        if player.inventory.spend_supercollateral(upgrade["cost"]):
-                            if options[selected] == "Optimism Ring Duration":
-                                player.optimism_ring_duration += upgrade["value"]
-                            elif options[selected] == "Attack Power":
-                                player.attack_power += upgrade["value"]
-                            elif options[selected] == "Ranged Attacks":
-                                player.ranged_attacks += upgrade["value"]
-                            dialogue_box.show([f"Vendor: Purchased {options[selected]}!"])
+                if event.key in range(pygame.K_1, pygame.K_9 + 1):
+                    index = event.key - pygame.K_1 + 1
+                    if 1 <= index <= len(options):
+                        selected = index - 1
+                        if options[selected] == "Exit":
+                            running = False
                         else:
-                            dialogue_box.show(["Vendor: Not enough Supercollateral!"])
+                            upgrade = vendor.upgrades[options[selected]]
+                            if player.inventory.spend_supercollateral(upgrade["cost"]):
+                                if options[selected] == "Optimism Ring Fill Rate":
+                                    player.optimism_ring_fill_rate += upgrade["value"]
+                                elif options[selected] == "Attack Power":
+                                    player.attack_power += upgrade["value"]
+                                elif options[selected] == "Ranged Attacks":
+                                    player.ranged_attacks += upgrade["value"]
+                                dialogue_box.show([f"Vendor: Purchased {options[selected]}!"])
+                            else:
+                                dialogue_box.show(["Vendor: Not enough Supercollateral!"])
                 elif event.key == pygame.K_ESCAPE:
                     running = False
 
@@ -273,6 +271,9 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
         pygame.display.flip()
         clock.tick(FPS)
 
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
     print("Exiting vendor_interaction...")
     return True
 
@@ -308,6 +309,9 @@ def final_cutscene(screen, clock, player, ui_background):
         pygame.display.flip()
         clock.tick(FPS)
 
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
     print("Exiting final_cutscene...")
     return True
 
@@ -317,7 +321,7 @@ def draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring
     pygame.draw.rect(hud_panel, WHITE, (0, 0, SCREEN_WIDTH, 30), 2)
 
     hp_bar = pygame.Surface((100, 15), pygame.SRCALPHA)
-    hp_width = (player.hp / 100) * 100
+    hp_width = (player.hp / player.max_hp) * 100
     for x in range(int(hp_width)):
         r = 255 if player.hp > 50 else int(255 * (player.hp / 50))
         g = 255 if player.hp < 50 else int(255 * (1 - (player.hp - 50) / 50))
@@ -331,6 +335,13 @@ def draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring
     for x in range(int(infection_width)):
         alpha = int(255 * (x / infection_width))
         pygame.draw.line(infection_bar, (255, 0, 0, alpha), (x, 0), (x, 15))
+
+    # Optimism Ring fill bar
+    ring_fill_bar = pygame.Surface((100, 15), pygame.SRCALPHA)
+    ring_fill_width = player.optimism_ring_fill
+    for x in range(int(ring_fill_width)):
+        alpha = int(255 * (x / 100))
+        pygame.draw.line(ring_fill_bar, (255, 215, 0, alpha), (x, 0), (x, 15))
 
     screen.blit(hud_panel, (0, 20))
 
@@ -366,12 +377,30 @@ def draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring
     screen.blit(currency_shadow, (680 + 2, 25 + 2))
     screen.blit(currency_text, (680, 25))
 
-    if player.optimism_ring_timer > 0:
-        screen.blit(ring_icon, (720, 25))
-        ring_text = font.render(f"{player.optimism_ring_timer // FPS}s", True, WHITE)
-        ring_shadow = font.render(f"{player.optimism_ring_timer // FPS}s", True, BLACK)
-        screen.blit(ring_shadow, (750 + 2, 25 + 2))
-        screen.blit(ring_text, (750, 25))
+    # Draw Optimism Ring fill bar
+    screen.blit(ring_icon, (720, 25))
+    screen.blit(ring_fill_bar, (750, 25))
+    if player.optimism_ring_cooldown > 0:
+        cooldown_text = font.render(f"CD: {int(player.optimism_ring_cooldown)}s", True, WHITE)
+        cooldown_shadow = font.render(f"CD: {int(player.optimism_ring_cooldown)}s", True, BLACK)
+        screen.blit(cooldown_shadow, (850 + 2, 25 + 2))
+        screen.blit(cooldown_text, (850, 25))
+    else:
+        fill_text = font.render(f"{int(player.optimism_ring_fill)}%", True, WHITE)
+        fill_shadow = font.render(f"{int(player.optimism_ring_fill)}%", True, BLACK)
+        screen.blit(fill_shadow, (850 + 2, 25 + 2))
+        screen.blit(fill_text, (850, 25))
+
+    # Add player level and XP
+    level_text = font.render(f"Level: {player.level}", True, WHITE)
+    level_shadow = font.render(f"Level: {player.level}", True, BLACK)
+    screen.blit(level_shadow, (10 + 2, 55 + 2))
+    screen.blit(level_text, (10, 55))
+
+    xp_text = font.render(f"XP: {player.xp}/{player.xp_to_next_level}", True, WHITE)
+    xp_shadow = font.render(f"XP: {player.xp}/{player.xp_to_next_level}", True, BLACK)
+    screen.blit(xp_shadow, (100 + 2, 55 + 2))
+    screen.blit(xp_text, (100, 55))
 
 def draw_labels(screen, scene, player, font):
     label_font = pygame.font.SysFont(DEFAULT_FONT, 20)
@@ -406,7 +435,7 @@ def draw_labels(screen, scene, player, font):
         screen.blit(label, label_rect)
 
     for enemy in scene.sapas:
-        label = label_font.render(enemy.name, True, (255, 0, 0))
+        label = label_font.render(f"{enemy.name} (Lvl {enemy.level})", True, (255, 0, 0))
         label_rect = label.get_rect(center=(enemy.rect.centerx, enemy.rect.top - 10))
         pygame.draw.rect(screen, (0, 0, 0, 180), label_rect.inflate(4, 4))
         screen.blit(label, label_rect)
@@ -417,27 +446,54 @@ def draw_labels(screen, scene, player, font):
         pygame.draw.rect(screen, (0, 0, 0, 180), label_rect.inflate(4, 4))
         screen.blit(label, label_rect)
 
+    if hasattr(scene, 'npcs'):
+        for npc in scene.npcs:
+            label = label_font.render("NPC" if not npc.is_vitalik else "Vitalik", True, (255, 255, 0) if npc.is_vitalik else (0, 255, 255))
+            label_rect = label.get_rect(center=(npc.rect.centerx, npc.rect.top - 10))
+            pygame.draw.rect(screen, (0, 0, 0, 180), label_rect.inflate(4, 4))
+            screen.blit(label, label_rect)
+
 def draw_exits(screen, scene, font):
     entry_x, entry_y = scene.entry
     exit_x, exit_y = scene.exit
 
+    # Load exit arrow sprite (if available)
+    exit_arrow_sprite = None
+    try:
+        exit_arrow_sprite = pygame.image.load("assets/sprites/exit_arrow.png").convert_alpha()
+        exit_arrow_sprite = pygame.transform.scale(exit_arrow_sprite, (30, 30))
+    except:
+        print("Failed to load exit arrow sprite. Using fallback.")
+
     if "west" in scene.exits:
         if entry_x == 0:
-            pygame.draw.polygon(screen, WHITE, [(10, (entry_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE + 10 + 20) + HUD_HEIGHT)])
+            if exit_arrow_sprite:
+                screen.blit(exit_arrow_sprite, (10, (entry_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT - 15))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(10, (entry_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE + 10 + 20) + HUD_HEIGHT)])
             exit_text = font.render("Previous Scene", True, WHITE)
             screen.blit(exit_text, (40, (entry_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT))
         elif entry_y == 0:
-            pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, HUD_HEIGHT + 20), (entry_x * TILE_SIZE + TILE_SIZE - 10, HUD_HEIGHT + 40), (entry_x * TILE_SIZE + TILE_SIZE + 10, HUD_HEIGHT + 40)])
+            if exit_arrow_sprite:
+                screen.blit(pygame.transform.rotate(exit_arrow_sprite, 90), (entry_x * TILE_SIZE + TILE_SIZE - 15, HUD_HEIGHT + 20))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, HUD_HEIGHT + 20), (entry_x * TILE_SIZE + TILE_SIZE - 10, HUD_HEIGHT + 40), (entry_x * TILE_SIZE + TILE_SIZE + 10, HUD_HEIGHT + 40)])
             exit_text = font.render("Previous Scene", True, WHITE)
             screen.blit(exit_text, (entry_x * TILE_SIZE + TILE_SIZE - 40, HUD_HEIGHT + 30))
 
     if "east" in scene.exits:
         if exit_x == MAZE_WIDTH - 1:
-            pygame.draw.polygon(screen, WHITE, [(SCREEN_WIDTH - 10, (exit_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT), (SCREEN_WIDTH - 30, (exit_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT), (SCREEN_WIDTH - 30, (exit_y * TILE_SIZE + TILE_SIZE + 10 + 20) + HUD_HEIGHT)])
+            if exit_arrow_sprite:
+                screen.blit(pygame.transform.flip(exit_arrow_sprite, True, False), (SCREEN_WIDTH - 40, (exit_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT - 15))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(SCREEN_WIDTH - 10, (exit_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT), (SCREEN_WIDTH - 30, (exit_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT), (SCREEN_WIDTH - 30, (exit_y * TILE_SIZE + TILE_SIZE + 10 + 20) + HUD_HEIGHT)])
             exit_text = font.render("Next Scene", True, WHITE)
             screen.blit(exit_text, (SCREEN_WIDTH - 150, (exit_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT))
         elif exit_y == MAZE_HEIGHT - 1:
-            pygame.draw.polygon(screen, WHITE, [(exit_x * TILE_SIZE + TILE_SIZE, SCREEN_HEIGHT - 50), (exit_x * TILE_SIZE + TILE_SIZE - 10, SCREEN_HEIGHT - 70), (exit_x * TILE_SIZE + TILE_SIZE + 10, SCREEN_HEIGHT - 70)])
+            if exit_arrow_sprite:
+                screen.blit(pygame.transform.rotate(exit_arrow_sprite, -90), (exit_x * TILE_SIZE + TILE_SIZE - 15, SCREEN_HEIGHT - 70))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(exit_x * TILE_SIZE + TILE_SIZE, SCREEN_HEIGHT - 50), (exit_x * TILE_SIZE + TILE_SIZE - 10, SCREEN_HEIGHT - 70), (exit_x * TILE_SIZE + TILE_SIZE + 10, SCREEN_HEIGHT - 70)])
             exit_text = font.render("Next Scene", True, WHITE)
             screen.blit(exit_text, (exit_x * TILE_SIZE + TILE_SIZE - 40, SCREEN_HEIGHT - 60))
 
@@ -487,6 +543,12 @@ def draw_minimap(screen, scene, player, font, ui_background):
         npc_y = (scene.npc.rect.y - HUD_HEIGHT) * scale
         pygame.draw.rect(minimap_surface, (0, 255, 255) if not scene.npc.is_vitalik else (255, 255, 0), (npc_x, npc_y, scale * TILE_SIZE, scale * TILE_SIZE))
 
+    if hasattr(scene, 'npcs'):
+        for npc in scene.npcs:
+            npc_x = npc.rect.x * scale
+            npc_y = (npc.rect.y - HUD_HEIGHT) * scale
+            pygame.draw.rect(minimap_surface, (0, 255, 255) if not npc.is_vitalik else (255, 255, 0), (npc_x, npc_y, scale * TILE_SIZE, scale * TILE_SIZE))
+
     screen.blit(minimap_surface, (SCREEN_WIDTH - minimap_size - 10, SCREEN_HEIGHT - minimap_size - 10))
     close_text = font.render("Press M to close", True, WHITE)
     screen.blit(close_text, (SCREEN_WIDTH - minimap_size - 10, SCREEN_HEIGHT - 25))
@@ -494,18 +556,14 @@ def draw_minimap(screen, scene, player, font, ui_background):
 def prompt_game_over(screen, dialogue_box, player, checkpoints, ui_background):
     print("Prompting game over...")
     has_checkpoint = checkpoints.has_checkpoint()
-    message = ["Vitalik: Infection has taken over!"]
-    if has_checkpoint:
-        message.append("Vitalik: Start over (S) or resume at checkpoint (R)? Press ESC to quit.")
-    else:
-        message.append("Vitalik: Start over (S)? Press ESC to quit.")
+    message = [f"Vitalik: Infection has taken over! Start over (S) or {'resume at checkpoint (R)' if has_checkpoint else 'quit (ESC)'}?"]
     dialogue_box.show(message, show_prompt=False)
     choice_made = False
     choice = None
 
     prompt_font = pygame.font.SysFont(DEFAULT_FONT, 20)
-    prompt_text = prompt_font.render("Press S to start over, R to resume, or ESC to quit" if has_checkpoint else "Press S to start over or ESC to quit", True, WHITE)
-    prompt_shadow = prompt_font.render("Press S to start over, R to resume, or ESC to quit" if has_checkpoint else "Press S to start over or ESC to quit", True, BLACK)
+    prompt_text = prompt_font.render(f"Press S to start over{' or R to resume' if has_checkpoint else ''}, or ESC to quit", True, WHITE)
+    prompt_shadow = prompt_font.render(f"Press S to start over{' or R to resume' if has_checkpoint else ''}, or ESC to quit", True, BLACK)
     prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
 
     while not choice_made:
@@ -516,12 +574,10 @@ def prompt_game_over(screen, dialogue_box, player, checkpoints, ui_background):
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 print(f"Key pressed in game over prompt: {event.key}")
-                if event.key == pygame.K_SPACE and dialogue_box.active:
-                    dialogue_box.next_line()
-                elif event.key == pygame.K_s and not dialogue_box.active:
+                if event.key == pygame.K_s:
                     choice = "start_over"
                     choice_made = True
-                elif event.key == pygame.K_r and has_checkpoint and not dialogue_box.active:
+                elif event.key == pygame.K_r and has_checkpoint:
                     choice = "resume"
                     choice_made = True
                 elif event.key == pygame.K_ESCAPE:
@@ -535,6 +591,9 @@ def prompt_game_over(screen, dialogue_box, player, checkpoints, ui_background):
         screen.blit(prompt_text, prompt_rect)
         pygame.display.flip()
 
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
     return choice
 
 def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
@@ -548,8 +607,9 @@ def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
         play_color_match
     ]
     selected_minigame = random.choice(minigames)
-    dialogue_box.show(["Vitalik: A puzzle guards the Sword of Solvency! Solve it to proceed.", "Vitalik: Press Y to start, N to skip."])
+    dialogue_box.show(["Vitalik: A puzzle guards the Sword of Solvency! Solve it to proceed. Press Y to start, N to skip, or ESC to close."])
     choice_made = False
+    result = False
 
     while not choice_made:
         for event in pygame.event.get():
@@ -557,14 +617,91 @@ def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
                 print("Quit event in play_sword_puzzle.")
                 return False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and dialogue_box.active:
-                    dialogue_box.next_line()
-                elif event.key == pygame.K_y and not dialogue_box.active:
+                if event.key == pygame.K_y:
                     if callable(selected_minigame) and selected_minigame(screen, clock):
+                        result = True
+                        choice_made = True
+                    else:
+                        dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                elif event.key == pygame.K_n:
+                    choice_made = True
+                elif event.key == pygame.K_ESCAPE:
+                    choice_made = True
+
+        screen.blit(ui_background, (0, 0))
+        dialogue_box.draw(screen)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
+    print("Exiting play_sword_puzzle...")
+    return result
+
+def play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
+    print("Entering play_vitalik_puzzle...")
+    minigames = [
+        play_hash_dash,
+        play_collateral_lock,
+        play_gas_fee_gauntlet,
+        play_anagram,
+        play_memory_sequence,
+        play_color_match
+    ]
+    selected_minigame = random.choice(minigames)
+    dialogue_box.show(["Vitalik: I’m trapped! Solve this puzzle to free me. Press Y to start, N to skip, or ESC to close."])
+    choice_made = False
+    result = False
+
+    while not choice_made:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print("Quit event in play_vitalik_puzzle.")
+                return False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    if callable(selected_minigame) and selected_minigame(screen, clock):
+                        result = True
+                        choice_made = True
+                    else:
+                        dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                elif event.key == pygame.K_n:
+                    choice_made = True
+                elif event.key == pygame.K_ESCAPE:
+                    choice_made = True
+
+        screen.blit(ui_background, (0, 0))
+        dialogue_box.draw(screen)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
+    print("Exiting play_vitalik_puzzle...")
+    return result
+
+def play_quest_minigame(screen, clock, dialogue_box, ui_background, minigame_func, player):
+    print("Entering play_quest_minigame...")
+    dialogue_box.show(["NPC: Complete this challenge for a reward! Press Y to start, N to skip, or ESC to close."])
+    choice_made = False
+    reward = 10  # Supercollateral reward for completing the minigame
+
+    while not choice_made:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print("Quit event in play_quest_minigame.")
+                return False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    if callable(minigame_func) and minigame_func(screen, clock):
+                        player.inventory.add_supercollateral(reward)
+                        dialogue_box.show([f"NPC: Well done! Here's your reward: {reward} Supercollateral."])
                         return True
                     else:
-                        dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip."])
-                elif event.key == pygame.K_n and not dialogue_box.active:
+                        dialogue_box.show(["NPC: Challenge failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                elif event.key == pygame.K_n:
                     return False
                 elif event.key == pygame.K_ESCAPE:
                     return False
@@ -574,14 +711,17 @@ def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
         pygame.display.flip()
         clock.tick(FPS)
 
-    print("Exiting play_sword_puzzle...")
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
+    print("Exiting play_quest_minigame...")
     return False
 
 def main():
     print("Starting game...")
     pygame.init()
     pygame.mixer.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("A Superseed Odyssey: Rise of the Sapa Slayer")
     clock = pygame.time.Clock()
 
@@ -659,12 +799,40 @@ def main():
             b = 59 + (y / SCREEN_HEIGHT) * (100 - 59)
             pygame.draw.line(ui_background, (int(r), int(g), int(b)), (0, y), (SCREEN_WIDTH, y))
 
-    player_name, player_gender, player_sprite = get_player_info(screen)
+    # Check for saved game
+    game_state = load_game()
+    if game_state:
+        player_name = game_state['player']['name']
+        player_gender = game_state['player']['gender']
+        player_sprite = pygame.image.load(MALE_SPRITE if player_gender == "male" else FEMALE_SPRITE).convert_alpha()
+        player_sprite = pygame.transform.scale(player_sprite, (TILE_SIZE, TILE_SIZE))
+    else:
+        player_name, player_gender, player_sprite = get_player_info(screen)
     print(f"Player info collected: Name={player_name}, Gender={player_gender}")
 
     try:
         print("Creating Player object...")
         player = Player(0, 0, player_name, player_gender, player_sprite)
+        if game_state:
+            player.rect.x, player.rect.y = game_state['player']['rect']
+            player.hp = game_state['player']['hp']
+            player.max_hp = game_state['player']['max_hp']
+            player.infection_level = game_state['player']['infection_level']
+            player.attack_power = game_state['player']['attack_power']
+            player.ranged_attacks = game_state['player']['ranged_attacks']
+            player.optimism_ring_fill = game_state['player']['optimism_ring_fill']
+            player.optimism_ring_fill_rate = game_state['player']['optimism_ring_fill_rate']
+            player.optimism_ring_duration = game_state['player']['optimism_ring_duration']
+            player.optimism_ring_cooldown = game_state['player']['optimism_ring_cooldown']
+            player.optimism_ring_active = game_state['player']['optimism_ring_active']
+            player.optimism_ring_timer = game_state['player']['optimism_ring_timer']
+            player.easy_mode = game_state['player']['easy_mode']
+            player.level = game_state['player']['level']
+            player.xp = game_state['player']['xp']
+            player.xp_to_next_level = game_state['player']['xp_to_next_level']
+            player.inventory.supercollateral = game_state['player']['inventory']['supercollateral']
+            player.inventory.fragments = game_state['player']['inventory']['fragments']
+            player.inventory.has_sword = game_state['player']['inventory']['has_sword']
         print(f"Player created: Name={player.name}, Gender={player.gender}")
     except Exception as e:
         print(f"Error creating Player object: {e}")
@@ -673,7 +841,11 @@ def main():
 
     try:
         print("Creating World object...")
-        world = World(player)
+        vitalik_freed = game_state['vitalik_freed'] if game_state else False
+        world = World(player, vitalik_freed)
+        if game_state:
+            world.current_area = game_state['world']['current_area']
+            world.current_scene = game_state['world']['current_scene']
         print("World object created.")
     except Exception as e:
         print(f"Error creating World object: {e}")
@@ -723,25 +895,51 @@ def main():
         play_memory_sequence,
         play_color_match
     ]
-    vitalik_freed = False
+    vitalik_freed = game_state['vitalik_freed'] if game_state else False
+    choice_made = game_state['choice_made'] if game_state else False
+    self_save_choice_made = game_state['self_save_choice_made'] if game_state else False
+    first_vendor_spawn = True  # Flag to track first vendor spawn
+
+    # Place Vitalik in Area 0, Scene 2, and a random NPC in the same scene
     for area in world.areas:
         for scene in area.scenes:
-            if random.random() < 0.3 and (not scene.npc or not scene.npc.is_vitalik):
-                is_vendor = random.random() < 0.5
-                is_crypto_scholar = random.random() < 0.2
-                scene.npc = NPC(scene, is_vendor=is_vendor, is_crypto_scholar=is_crypto_scholar)
+            if area.area_id == 0 and scene.scene_id == 2 and not vitalik_freed:
+                scene.npc = NPC(scene, is_vitalik=True)
+                # Add a random NPC for context
+                random_npc = NPC(scene, is_vitalik=False)
+                random_npc.lore = ["NPC: Although trapped, the gods marked this area untouchable by Sapa till Vitalik can be freed."]
+                scene.npcs = [random_npc]  # Add a list to store multiple NPCs
+            elif area.area_id == 0 and scene.scene_id == 4 and not player.inventory.has_sword:
+                x, y = scene.find_open_position()
+                scene.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+            else:
+                # Vendor NPCs can spawn after Vitalik is freed (Area 0, Scene 3 onwards)
+                if vitalik_freed and (area.area_id > 0 or scene.scene_id >= 3) and random.random() < 0.3:
+                    if not scene.npc or not scene.npc.is_vitalik:
+                        new_vendor = NPC(scene, is_vendor=True)
+                        if not hasattr(scene, 'npcs'):
+                            scene.npcs = []
+                        scene.npcs.append(new_vendor)
+                # Other NPCs spawn only after the player has the sword
+                if player.inventory.has_sword and random.random() < 0.3:
+                    if not scene.npc or not scene.npc.is_vitalik:
+                        is_crypto_scholar = random.random() < 0.2
+                        new_npc = NPC(scene, is_crypto_scholar=is_crypto_scholar)
+                        if not hasattr(scene, 'npcs'):
+                            scene.npcs = []
+                        scene.npcs.append(new_npc)
             if random.random() < 0.2:
                 scene.minigame = random.choice(minigames)
     print("NPCs, vendors, and minigames placed in scenes.")
 
-    print("Starting intro cutscene with tutorial...")
-    try:
-        play_intro_cutscene(screen, clock, player, ui_background)
-        print("Intro tutorial completed.")
-    except Exception as e:
-        print(f"Error during intro tutorial: {e}")
-        pygame.quit()
-        sys.exit()
+    if not game_state:
+        try:
+            play_intro_cutscene(screen, clock, player, ui_background)
+            print("Intro cutscene completed.")
+        except Exception as e:
+            print(f"Error during intro cutscene: {e}")
+            pygame.quit()
+            sys.exit()
 
     try:
         pygame.mixer.music.stop()
@@ -751,9 +949,17 @@ def main():
     except pygame.error as e:
         print(f"Failed to load game music: {e}. Continuing without music.")
 
-    choice_made = False
-    game_over = False
+    choice_made = game_state['choice_made'] if game_state else False
+    self_save_choice_made = game_state['self_save_choice_made'] if game_state else False
     vitalik = None
+    if game_state and game_state['vitalik']['rect']:
+        vitalik = NPC(current_scene, is_vitalik=True)
+        vitalik.is_freed = game_state['vitalik']['is_freed']
+        vitalik.following = game_state['vitalik']['following']
+        vitalik.invulnerable = game_state['vitalik']['invulnerable']
+        vitalik.rect.x, vitalik.rect.y = game_state['vitalik']['rect']
+        current_scene.npc = vitalik
+
     last_time = pygame.time.get_ticks()
     paused = False
     show_minimap = False
@@ -761,8 +967,12 @@ def main():
     last_scene = None
     last_area = -1
     projectiles = []
-    self_save_choice_made = False
     infection_active = True
+    game_over = False
+    music_volume = 1.0
+    sfx_volume = 1.0
+    pygame.mixer.music.set_volume(music_volume)
+    fullscreen = False
 
     while not game_over:
         delta_time = 0
@@ -775,9 +985,11 @@ def main():
         sapas = current_scene.sapas
 
         if world.current_area != last_area:
+            paused = True
             if not play_area_cutscene(screen, clock, player, world.current_area, ui_background):
                 print("Area cutscene skipped or failed, continuing to game loop.")
             last_area = world.current_area
+            paused = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -787,8 +999,14 @@ def main():
                 print(f"Key pressed in main loop: {event.key}")
                 if event.key == pygame.K_p and not dialogue_box.active:
                     paused = True
-                    show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints)
+                    show_minimap = show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints, music_volume, sfx_volume)
                     paused = False
+                if event.key == pygame.K_f:
+                    fullscreen = not fullscreen
+                    if fullscreen:
+                        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
                 if not paused:
                     if event.key == pygame.K_r:
                         checkpoints.load(player)
@@ -804,18 +1022,62 @@ def main():
                     if event.key == pygame.K_e:
                         if current_scene.npc and player.rect.colliderect(current_scene.npc.rect):
                             if current_scene.npc.is_vendor:
+                                paused = True
                                 vendor_interaction(screen, clock, player, current_scene.npc, dialogue_box, ui_background)
+                                paused = False
+                            elif current_scene.npc.is_crypto_scholar and current_scene.npc.minigame:
+                                paused = True
+                                play_quest_minigame(screen, clock, dialogue_box, ui_background, current_scene.npc.minigame, player)
+                                paused = False
+                            elif current_scene.npc.is_vitalik and not vitalik_freed:
+                                paused = True
+                                if not vitalik_cutscene(screen, clock, player, dialogue_box):
+                                    game_over = True
+                                if play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
+                                    vitalik_freed = True
+                                    current_scene.npc.is_freed = True
+                                    current_scene.npc.following = True
+                                    vitalik = current_scene.npc
+                                    dialogue_box.show(["Vitalik: I am freed! Let’s find the Sword of Solvency together."])
+                                else:
+                                    game_over = True
+                                paused = False
                             else:
+                                paused = True
                                 dialogue_box.show(current_scene.npc.lore)
+                                paused = False
+                        # Handle other NPCs in the scene
+                        if hasattr(current_scene, 'npcs'):
+                            for npc in current_scene.npcs:
+                                if player.rect.colliderect(npc.rect):
+                                    if npc.is_vendor:
+                                        if first_vendor_spawn and vitalik:
+                                            dialogue_box.show(["Vitalik: Oh, a vendor! Interact to get upgrades."])
+                                            first_vendor_spawn = False
+                                        paused = True
+                                        vendor_interaction(screen, clock, player, npc, dialogue_box, ui_background)
+                                        paused = False
+                                    elif npc.is_crypto_scholar and npc.minigame:
+                                        paused = True
+                                        play_quest_minigame(screen, clock, dialogue_box, ui_background, npc.minigame, player)
+                                        paused = False
+                                    else:
+                                        paused = True
+                                        dialogue_box.show(npc.lore)
+                                        paused = False
                         elif current_scene.minigame and player.rect.colliderect(
                                 pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, TILE_SIZE, TILE_SIZE)):
-                            dialogue_box.show(["Vitalik: Press Y to play minigame, N to skip."])
+                            paused = True
+                            dialogue_box.show(["Vitalik: Press Y to play minigame, N to skip, or ESC to close."])
+                            paused = False
                         elif current_scene.sword and player.rect.colliderect(current_scene.sword) and vitalik_freed:
+                            paused = True
                             if play_sword_puzzle(screen, clock, dialogue_box, ui_background):
                                 player.inventory.add_sword()
                                 infection_active = False
                                 current_scene.sword = None
                                 dialogue_box.show([f"Vitalik: {player.name} acquired the Sword of Solvency!"])
+                            paused = False
                     if event.key == pygame.K_y and not dialogue_box.active and current_scene.minigame:
                         print("Starting minigame...")
                         minigame_func = current_scene.minigame
@@ -836,16 +1098,17 @@ def main():
                         show_minimap = not show_minimap
 
         if not paused and not dialogue_box.active:
-            if random.random() < 0.05 and len(sapas) < 5:
+            # Sapa spawning logic
+            if (world.current_area > 0 or world.current_scene != 2) and random.random() < 0.05 and len(sapas) < 5:
                 available_sapa_types = [Sapa, DiagonalSapa]
-                if current_scene.area_id >= 1 and player.inventory.has_sword:
+                if world.current_area >= 1 and player.inventory.has_sword:
                     available_sapa_types.append(ChaserSapa)
-                if current_scene.area_id >= 2:
+                if world.current_area >= 2:
                     available_sapa_types.append(SplitterSapa)
-                if current_scene.area_id >= 3:
+                if world.current_area >= 3:
                     available_sapa_types.append(ProjectileSapa)
                 sapa_type = random.choice(available_sapa_types)
-                new_sapa = sapa_type(current_scene)
+                new_sapa = sapa_type(current_scene, player.level)
                 sapas.append(new_sapa)
 
             keys = pygame.key.get_pressed()
@@ -854,14 +1117,16 @@ def main():
             entry_x, entry_y = current_scene.entry
             exit_x, exit_y = current_scene.exit
 
-            entry_rect = pygame.Rect(entry_x * TILE_SIZE, (entry_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, 2 * TILE_SIZE)
-            exit_rect = pygame.Rect(exit_x * TILE_SIZE, (exit_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, 2 * TILE_SIZE)
+            entry_rect = pygame.Rect(entry_x * TILE_SIZE, (entry_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, TILE_SIZE)
+            exit_rect = pygame.Rect(exit_x * TILE_SIZE, (exit_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, TILE_SIZE)
 
             if "west" in current_scene.exits and player.rect.colliderect(entry_rect):
                 world.move_to_scene("west")
                 current_scene = world.get_current_scene()
                 start_x, start_y = current_scene.maze.find_open_start_position()
                 player.rect.x, player.rect.y = start_x, start_y
+                if vitalik and vitalik.following:
+                    vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
                 current_scene.sapas.clear()
                 projectiles.clear()
 
@@ -870,6 +1135,8 @@ def main():
                 current_scene = world.get_current_scene()
                 start_x, start_y = current_scene.maze.find_open_start_position()
                 player.rect.x, player.rect.y = start_x, start_y
+                if vitalik and vitalik.following:
+                    vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
                 current_scene.sapas.clear()
                 projectiles.clear()
 
@@ -888,36 +1155,46 @@ def main():
                     checkpoints.save(player)
             if current_scene.npc and current_scene.npc.is_vitalik and not vitalik_freed and player.rect.colliderect(
                     current_scene.npc.rect):
+                paused = True
                 if not vitalik_cutscene(screen, clock, player, dialogue_box):
                     game_over = True
-                minigame = random.choice(minigames)
-                if minigame(screen, clock):
+                if play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
                     vitalik_freed = True
                     current_scene.npc.is_freed = True
                     current_scene.npc.following = True
                     vitalik = current_scene.npc
-                    dialogue_box.show(["Vitalik: I am freed! I will guide you to the Sword of Solvency."])
+                    dialogue_box.show(["Vitalik: I am freed! Let’s find the Sword of Solvency together."])
                 else:
                     game_over = True
+                paused = False
             if current_scene.npc and current_scene.npc.is_vitalik and current_scene.npc.is_freed and not choice_made and player.inventory.has_sword:
+                paused = True
                 choice = vitalik_choice(screen, clock, player, dialogue_box)
                 choice_made = True
                 if choice == "self" and not self_save_choice_made:
                     self_save_choice_made = True
                     player.lose_sword()
                     infection_active = True
-                    current_scene.relocate_sword()
-                    sapas.extend([random.choice([Sapa, DiagonalSapa, ChaserSapa])(current_scene) for _ in range(5)])
+                    # Relocate sword far from player
+                    while True:
+                        x, y = current_scene.find_open_position()
+                        distance = ((x - player.rect.x) ** 2 + (y - player.rect.y) ** 2) ** 0.5
+                        if distance > 5 * TILE_SIZE:
+                            current_scene.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+                            break
+                    # Spawn Sapa horde
+                    for _ in range(5):
+                        new_sapa = Sapa(current_scene, player.level)
+                        sapas.append(new_sapa)
                 elif choice == "world":
-                    world.current_area += 1
-                    world.current_scene = 0
-                    current_scene = world.get_current_scene()
-                    start_x, start_y = current_scene.maze.find_open_start_position()
-                    player.rect.x, player.rect.y = start_x, start_y
-                    current_scene.sapas.clear()
-                    projectiles.clear()
-                    choice_made = False
+                    dialogue_box.show([
+                        f"Vitalik: A true hero rises! I knew you had it in you, {player.name}! The first fragment’s light will cleanse your infection completely.",
+                        "Vitalik: Together, we’ll gather the fragments, defeat Skuld, and bring prosperity back to Krypto—let’s do this!"
+                    ])
+                    choice_made = True
+                paused = False
             if current_scene.sword and player.rect.colliderect(current_scene.sword) and vitalik_freed and not player.inventory.has_sword:
+                paused = True
                 if play_sword_puzzle(screen, clock, dialogue_box, ui_background):
                     player.inventory.add_sword()
                     infection_active = False
@@ -927,29 +1204,41 @@ def main():
                     choice_made = False
                     self_save_choice_made = False
                     infection_active = False
+                paused = False
             for fragment in current_scene.fragments[:]:
                 if player.rect.colliderect(fragment):
-                    player.collect_fragment()
-                    infection_active = False
-                    current_scene.fragments.remove(fragment)
-                    if player.inventory.fragments < 6:
-                        world.current_area += 1
-                        world.current_scene = 0
-                        current_scene = world.get_current_scene()
-                        start_x, start_y = current_scene.maze.find_open_start_position()
-                        player.rect.x, player.rect.y = start_x, start_y
-                        current_scene.sapas.clear()
-                        projectiles.clear()
+                    if current_scene.boss and current_scene.boss.hp > 0:
+                        dialogue_box.show(["Vitalik: Defeat the boss to claim the fragment!"])
+                    else:
+                        player.collect_fragment()
+                        infection_active = False
+                        current_scene.fragments.remove(fragment)
+                        if player.inventory.fragments == 1:
+                            infection_active = False
+                            dialogue_box.show(["Vitalik: The first fragment has fully cured your infection!"])
+                        if player.inventory.fragments < 6:
+                            world.current_area += 1
+                            world.current_scene = 0
+                            current_scene = world.get_current_scene()
+                            start_x, start_y = current_scene.maze.find_open_start_position()
+                            player.rect.x, player.rect.y = start_x, start_y
+                            if vitalik and vitalik.following:
+                                vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
+                            current_scene.sapas.clear()
+                            projectiles.clear()
 
             for sapa in sapas[:]:
                 sapa.move(current_scene.maze, player)
-                if player.optimism_ring_timer <= 0:
-                    projectile = sapa.attack(player)
-                    if projectile:
-                        if isinstance(projectile, list):
+                if player.optimism_ring_active:
+                    continue  # Skip Sapa attacks if player is invincible
+                projectile = sapa.attack(player)
+                if projectile:
+                    if isinstance(projectile, list):
+                        for new_sapa in projectile:
+                            new_sapa.level = sapa.level
                             sapas.extend(projectile)
-                        else:
-                            projectiles.append(projectile)
+                    else:
+                        projectiles.append(projectile)
                 if vitalik and not vitalik.invulnerable and sapa.rect.colliderect(vitalik.rect):
                     print("Sapa attempted to attack Vitalik, but he's invulnerable.")
                 if player.hp <= 0:
@@ -959,13 +1248,13 @@ def main():
                 rect, dx, dy = proj
                 rect.x += dx * 5
                 rect.y += dy * 5
-                if rect.colliderect(player.rect) and player.optimism_ring_timer <= 0:
+                if rect.colliderect(player.rect) and not player.optimism_ring_active:
                     player.take_damage(5)
                     projectiles.remove(proj)
                 elif rect.x < 0 or rect.x > SCREEN_WIDTH or rect.y < 0 or rect.y > SCREEN_HEIGHT:
                     projectiles.remove(proj)
 
-            combat.update(sapas)
+            combat.update(sapas, player)
             player.update()
 
             if infection_active and not dialogue_box.active:
@@ -981,7 +1270,18 @@ def main():
                         start_x, start_y = current_scene.maze.find_open_start_position()
                         player.rect.x, player.rect.y = start_x, start_y
                         player.hp = 100
+                        player.max_hp = 100
                         player.infection_level = 50
+                        player.level = 1
+                        player.xp = 0
+                        player.xp_to_next_level = 10
+                        player.attack_power = 2
+                        player.optimism_ring_fill = 0
+                        player.optimism_ring_fill_rate = 1.0
+                        player.optimism_ring_duration = 5
+                        player.optimism_ring_cooldown = 0
+                        player.optimism_ring_active = False
+                        player.optimism_ring_timer = 0
                         player.inventory.supercollateral = 0
                         player.inventory.fragments = 0
                         player.inventory.has_sword = False
@@ -989,6 +1289,7 @@ def main():
                         vitalik_freed = False
                         choice_made = False
                         self_save_choice_made = False
+                        first_vendor_spawn = True
                         vitalik = None
                         current_scene.sapas.clear()
                         projectiles.clear()
@@ -1004,8 +1305,10 @@ def main():
             print(f"Player infection level: {player.infection_level}, HP: {player.hp}")
 
             if player.inventory.fragments == 6:
+                paused = True
                 if final_cutscene(screen, clock, player, ui_background):
                     game_over = True
+                paused = False
 
         if player.hp <= 0:
             current_scene_index = (world.current_area, world.current_scene)
@@ -1028,7 +1331,18 @@ def main():
             start_x, start_y = current_scene.maze.find_open_start_position()
             player.rect.x, player.rect.y = start_x, start_y
             player.hp = 100
+            player.max_hp = 100
             player.infection_level = 50
+            player.level = 1
+            player.xp = 0
+            player.xp_to_next_level = 10
+            player.attack_power = 2
+            player.optimism_ring_fill = 0
+            player.optimism_ring_fill_rate = 1.0
+            player.optimism_ring_duration = 5
+            player.optimism_ring_cooldown = 0
+            player.optimism_ring_active = False
+            player.optimism_ring_timer = 0
             player.inventory.supercollateral = 0
             player.inventory.fragments = 0
             player.inventory.has_sword = False
@@ -1036,6 +1350,7 @@ def main():
             vitalik_freed = False
             choice_made = False
             self_save_choice_made = False
+            first_vendor_spawn = True
             vitalik = None
             current_scene.sapas.clear()
             projectiles.clear()
@@ -1048,6 +1363,9 @@ def main():
             pygame.draw.rect(screen, (255, 0, 0), proj[0])
         if current_scene.npc:
             current_scene.npc.draw(screen)
+        if hasattr(current_scene, 'npcs'):
+            for npc in current_scene.npcs:
+                npc.draw(screen)
         player.draw(screen)
         combat.draw(screen)
         draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring_icon, infection_active)

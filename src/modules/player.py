@@ -1,7 +1,8 @@
 # src/modules/player.py
 import pygame
 import random
-from src.config import TILE_SIZE, PLAYER_SPEED, CRITICAL_TINT, FPS
+import os
+from src.config import TILE_SIZE, PLAYER_SPEED, CRITICAL_TINT, FPS, HUD_HEIGHT, OPTIMISM_RING_EFFECT
 from src.modules.inventory import Inventory
 
 class Player:
@@ -12,17 +13,39 @@ class Player:
             self.name = name
             self.gender = gender
             self.sprite = sprite
-            self.hp = 100
+            self.max_hp = 100
+            self.hp = self.max_hp
             self.infection_level = 50
             self.inventory = Inventory()
             self.ranged_attacks = 0
-            self.attack_power = 10
-            self.optimism_ring_duration = 5
-            self.optimism_ring_timer = 0
+            self.attack_power = 2
+            self.level = 1
+            self.xp = 0
+            self.xp_to_next_level = 10
+            self.optimism_ring_fill = 0  # Percentage (0-100)
+            self.optimism_ring_fill_rate = 1.0  # 1% per second at level 1
+            self.optimism_ring_duration = 5  # Seconds at level 1
+            self.optimism_ring_cooldown = 0  # Seconds remaining
+            self.optimism_ring_cooldown_max = 60  # 60 seconds cooldown
+            self.optimism_ring_active = False
+            self.optimism_ring_timer = 0  # Frames remaining for active effect
             self.facing_right = True
             self.easy_mode = False
             self.shake_timer = 0  # For hit indication
             self.shake_offset = (0, 0)  # Offset for shaking
+
+            # Load Optimism Ring effect sprite
+            self.optimism_ring_sprite = None
+            try:
+                print(f"Attempting to load Optimism Ring effect sprite from: {OPTIMISM_RING_EFFECT}")
+                if not os.path.exists(OPTIMISM_RING_EFFECT):
+                    raise FileNotFoundError(f"File not found: {OPTIMISM_RING_EFFECT}")
+                self.optimism_ring_sprite = pygame.image.load(OPTIMISM_RING_EFFECT).convert_alpha()
+                self.optimism_ring_sprite = pygame.transform.scale(self.optimism_ring_sprite, (80, 80))  # Larger than player sprite to encompass
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load Optimism Ring effect sprite at {OPTIMISM_RING_EFFECT}. Error: {e}. Using placeholder.")
+                self.optimism_ring_sprite = None
+
             print("Player initialized successfully.")
         except Exception as e:
             print(f"Error in Player.__init__: {e}")
@@ -59,8 +82,28 @@ class Player:
             raise
 
     def take_damage(self, amount):
+        if self.optimism_ring_active:
+            print("Player is invincible due to Optimism Ring!")
+            return
         self.hp -= amount
         self.shake_timer = 20  # Increased to 20 frames for more noticeable effect
+        if self.hp < 0:
+            self.hp = 0
+
+    def gain_xp(self, amount):
+        self.xp += amount
+        while self.xp >= self.xp_to_next_level:
+            self.level_up()
+
+    def level_up(self):
+        self.level += 1
+        self.xp -= self.xp_to_next_level
+        self.xp_to_next_level = int(self.xp_to_next_level * 1.5)  # Increase XP needed for next level
+        self.max_hp += 10
+        self.hp = self.max_hp  # Restore HP on level up
+        self.attack_power += 2
+        self.optimism_ring_duration = min(10, self.optimism_ring_duration + 1)  # Cap at 10 seconds
+        print(f"Player leveled up to level {self.level}! HP: {self.max_hp}, Attack Power: {self.attack_power}, Optimism Ring Duration: {self.optimism_ring_duration}s")
 
     def draw(self, screen):
         print("Entering Player.draw...")
@@ -75,8 +118,13 @@ class Player:
             # Draw sprite with shake offset
             draw_pos = (self.rect.x + self.shake_offset[0], self.rect.y + self.shake_offset[1])
             screen.blit(self.sprite, draw_pos)
-            if self.optimism_ring_timer > 0:
-                pygame.draw.circle(screen, (255, 255, 0), (self.rect.centerx + self.shake_offset[0], self.rect.centery + self.shake_offset[1]), 40, 2)
+            if self.optimism_ring_active:
+                if self.optimism_ring_sprite:
+                    # Center the sprite around the player
+                    sprite_pos = (self.rect.centerx - 40 + self.shake_offset[0], self.rect.centery - 40 + self.shake_offset[1])
+                    screen.blit(self.optimism_ring_sprite, sprite_pos)
+                else:
+                    pygame.draw.circle(screen, (255, 255, 0), (self.rect.centerx + self.shake_offset[0], self.rect.centery + self.shake_offset[1]), 40, 2)
             print("Player drawn successfully.")
         except Exception as e:
             print(f"Error in Player.draw: {e}")
@@ -85,8 +133,20 @@ class Player:
     def update(self):
         print("Entering Player.update...")
         try:
-            if self.optimism_ring_timer > 0:
+            # Update Optimism Ring fill
+            if not self.optimism_ring_active and self.optimism_ring_cooldown <= 0:
+                self.optimism_ring_fill = min(100, self.optimism_ring_fill + self.optimism_ring_fill_rate / FPS)
+            elif self.optimism_ring_cooldown > 0:
+                self.optimism_ring_cooldown -= 1 / FPS
+
+            # Update Optimism Ring active timer
+            if self.optimism_ring_active:
                 self.optimism_ring_timer -= 1
+                if self.optimism_ring_timer <= 0:
+                    self.optimism_ring_active = False
+                    self.optimism_ring_fill = 0
+                    self.optimism_ring_cooldown = self.optimism_ring_cooldown_max
+
             print("Player updated successfully.")
         except Exception as e:
             print(f"Error in Player.update: {e}")
@@ -123,7 +183,8 @@ class Player:
     def activate_optimism_ring(self):
         print("Entering Player.activate_optimism_ring...")
         try:
-            if self.optimism_ring_timer <= 0:
+            if self.optimism_ring_fill >= 100 and not self.optimism_ring_active and self.optimism_ring_cooldown <= 0:
+                self.optimism_ring_active = True
                 self.optimism_ring_timer = self.optimism_ring_duration * FPS
                 print("Optimism Ring activated.")
         except Exception as e:

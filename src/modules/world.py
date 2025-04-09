@@ -1,9 +1,11 @@
 # src/modules/world.py
 import pygame
 import random
+import os
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, \
     AREA_0_BACKGROUND, AREA_1_BACKGROUND, AREA_2_BACKGROUND, AREA_3_BACKGROUND, AREA_4_BACKGROUND, AREA_5_BACKGROUND, \
-    HUD_HEIGHT, AREA_0_TILESHEET, AREA_1_TILESHEET, AREA_2_TILESHEET, AREA_3_TILESHEET, AREA_4_TILESHEET, AREA_5_TILESHEET, \
+    HUD_HEIGHT, AREA_0_FLOOR, AREA_0_WALL, AREA_1_FLOOR, AREA_1_WALL, AREA_2_FLOOR, AREA_2_WALL, \
+    AREA_3_FLOOR, AREA_3_WALL, AREA_4_FLOOR, AREA_4_WALL, AREA_5_FLOOR, AREA_5_WALL, \
     SWORD_SPRITE, TOKEN_SPRITE, CHECKPOINT_SPRITE, FRAGMENT_SPRITE
 from src.modules.enemies import Sapa, SplitterSapa, ProjectileSapa, ChaserSapa, DiagonalSapa, BossArea1, BossArea2, \
     BossArea3, BossArea4, BossArea5, Skuld
@@ -350,37 +352,52 @@ class Scene:
                     b = 59 + (y / SCREEN_HEIGHT) * (100 - 59)
                     pygame.draw.line(self.background, (int(r), int(g), int(b)), (0, y), (SCREEN_WIDTH, y))
 
-            # Generate random maze
-            self.maze = Maze()
+            # Generate random maze with fewer obstacles for boss scenes (Scene 4)
+            if self.scene_id == 4:  # Boss scene
+                self.maze = Maze(num_crosses=2)  # Fewer obstacles for boss fights
+            else:
+                self.maze = Maze()
             self.grid = self.maze.grid
             self.width = self.maze.width
             self.height = self.maze.height
             self.entry = self.maze.entry
             self.exit = self.maze.exit
 
-            # Load area-specific tilesheet
-            tilesheet_paths = {
-                0: AREA_0_TILESHEET,
-                1: AREA_1_TILESHEET,
-                2: AREA_2_TILESHEET,
-                3: AREA_3_TILESHEET,
-                4: AREA_4_TILESHEET,
-                5: AREA_5_TILESHEET
+            # Load area-specific floor and wall PNGs
+            floor_paths = {
+                0: AREA_0_FLOOR,
+                1: AREA_1_FLOOR,
+                2: AREA_2_FLOOR,
+                3: AREA_3_FLOOR,
+                4: AREA_4_FLOOR,
+                5: AREA_5_FLOOR
             }
-            tilesheet_path = tilesheet_paths.get(area_id, None)
+            wall_paths = {
+                0: AREA_0_WALL,
+                1: AREA_1_WALL,
+                2: AREA_2_WALL,
+                3: AREA_3_WALL,
+                4: AREA_4_WALL,
+                5: AREA_5_WALL
+            }
+            floor_path = floor_paths.get(area_id, None)
+            wall_path = wall_paths.get(area_id, None)
             self.wall_tile = None
             self.floor_tile = None
             try:
-                print(f"Attempting to load tilesheet from: {tilesheet_path}")
-                if not os.path.exists(tilesheet_path):
-                    raise FileNotFoundError(f"File not found: {tilesheet_path}")
-                tilesheet = pygame.image.load(tilesheet_path).convert_alpha()
-                # Extract wall tile (at 0,0)
-                self.wall_tile = tilesheet.subsurface(pygame.Rect(0, 0, 40, 40))
-                # Extract floor tile (at 40,0)
-                self.floor_tile = tilesheet.subsurface(pygame.Rect(40, 0, 40, 40))
+                print(f"Attempting to load floor tile from: {floor_path}")
+                if not os.path.exists(floor_path):
+                    raise FileNotFoundError(f"File not found: {floor_path}")
+                self.floor_tile = pygame.image.load(floor_path).convert_alpha()
+                self.floor_tile = pygame.transform.scale(self.floor_tile, (TILE_SIZE, TILE_SIZE))
+
+                print(f"Attempting to load wall tile from: {wall_path}")
+                if not os.path.exists(wall_path):
+                    raise FileNotFoundError(f"File not found: {wall_path}")
+                self.wall_tile = pygame.image.load(wall_path).convert_alpha()
+                self.wall_tile = pygame.transform.scale(self.wall_tile, (TILE_SIZE, TILE_SIZE))
             except (pygame.error, FileNotFoundError, Exception) as e:
-                print(f"Failed to load tilesheet at {tilesheet_path}. Error: {e}. Will use procedural rendering.")
+                print(f"Failed to load floor/wall tiles: {e}. Will use procedural rendering.")
 
             # Load sprites for sword, tokens, checkpoints, fragments
             try:
@@ -464,19 +481,19 @@ class Scene:
                 fragment = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
                 self.fragments.append(fragment)
 
-                # Place a boss at fragment locations
+                # Place a boss at fragment locations, passing player.level
                 if self.area_id == 0:
-                    self.boss = BossArea1(self)
+                    self.boss = BossArea1(self, self.player.level)
                 elif self.area_id == 1:
-                    self.boss = BossArea2(self)
+                    self.boss = BossArea2(self, self.player.level)
                 elif self.area_id == 2:
-                    self.boss = BossArea3(self)
+                    self.boss = BossArea3(self, self.player.level)
                 elif self.area_id == 3:
-                    self.boss = BossArea4(self)
+                    self.boss = BossArea4(self, self.player.level)
                 elif self.area_id == 4:
-                    self.boss = BossArea5(self)
+                    self.boss = BossArea5(self, self.player.level)
                 elif self.area_id == 5:
-                    self.boss = Skuld(self)
+                    self.boss = Skuld(self, self.player.level)
 
             start = (self.player.rect.x // TILE_SIZE, (self.player.rect.y - HUD_HEIGHT) // TILE_SIZE)
             for token in self.tokens:
@@ -575,7 +592,7 @@ class Scene:
             # Draw the area-specific background
             screen.blit(self.background, (0, 0))
 
-            # Draw the maze using tilesheet
+            # Draw the maze using floor and wall tiles
             if self.wall_tile and self.floor_tile:
                 for y in range(self.height):
                     for x in range(self.width):

@@ -51,44 +51,53 @@ def play_area_cutscene(screen, clock, player, area_id, ui_background):
             lines = [
                 f"Vitalik: You’ve arrived at the Slums of Krypto, {player.name}.",
                 "Vitalik: Once a bustling hub, now a cursed wasteland where the Sapa roam.",
-                f"Vitalik: A Sapa’s bite courses through you, spreading the curse—seek me, Sage Vitalik, for the Sword of Solvency."
+                f"Vitalik: A Sapa’s bite courses through you, spreading the curse—seek me, Sage Vitalik, for the Sword of Solvency.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         elif area_id == 1:
             lines = [
                 f"Vitalik: You enter Seisan Spires, {player.name}.",
                 "Vitalik: The air grows darker as Seisan’s chaos takes hold.",
                 "Vitalik: The ElPee, protectors of the Superseed, were wiped out by Seisan and Skuld, the Debt King.",
-                f"Vitalik: {'With the Sword of Solvency, your infection is halted.' if player.inventory.has_sword else 'Find the Sword of Solvency to halt your infection.'} Collect the first fragment to cure yourself."
+                f"Vitalik: {'With the Sword of Solvency, your infection is halted.' if player.inventory.has_sword else 'Find the Sword of Solvency to halt your infection.'} Collect the first fragment to cure yourself.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         elif area_id == 2:
             lines = [
                 f"Vitalik: You enter the Ethereum Chain Ruins, {player.name}.",
                 "Vitalik: Ancient ruins pulse with forgotten power.",
                 "Vitalik: Seisan promised Skuld unlimited power, immortality, and a crown to rule Krypto, shattering the Superseed.",
-                "Vitalik: Collect fragments to weaken Skuld’s grip. Beware of stronger Sapas."
+                "Vitalik: Collect fragments to weaken Skuld’s grip. Beware of stronger Sapas.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         elif area_id == 3:
             lines = [
                 f"Vitalik: You enter Optimism’s Echo, {player.name}.",
                 "Vitalik: A faint light shines amidst the chaos.",
                 "Vitalik: With the Superseed destroyed, Krypto fell into darkness, famine, and disease.",
-                "Vitalik: The fragments are closer, but so is danger. Keep going!"
+                "Vitalik: The fragments are closer, but so is danger. Keep going!",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         elif area_id == 4:
             lines = [
                 f"Vitalik: You enter the MEV Gang Hideout, {player.name}.",
                 "Vitalik: The MEV gang’s corruption fuels the Sapa curse.",
                 f"Vitalik: {pronoun.capitalize()} once reveled in Krypto’s underbelly as part of this gang, but now you fight against them.",
-                "Vitalik: Prepare for a fierce battle ahead."
+                "Vitalik: Prepare for a fierce battle ahead.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         elif area_id == 5:
             lines = [
                 f"Vitalik: You enter Skuld’s Lair, {player.name}.",
                 "Vitalik: The Debt King awaits, surrounded by chaos.",
-                "Vitalik: This is your final stand to restore the Superseed and save Krypto."
+                "Vitalik: This is your final stand to restore the Superseed and save Krypto.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
             ]
         else:
-            lines = [f"Vitalik: Entering an unknown region, {player.name}."]
+            lines = [
+                f"Vitalik: Entering an unknown region, {player.name}.",
+                "Vitalik: Press P to access the menu for tutorial, minimap, and more."
+            ]
 
         dialogue_box = DialogueBox()
         dialogue_box.show(lines)

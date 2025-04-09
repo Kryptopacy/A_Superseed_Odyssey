@@ -44,14 +44,25 @@ HUD_VIRUS_ICON = os.path.join(ROOT_DIR, "assets/images/virus_icon.png")
 HUD_RING_ICON = os.path.join(ROOT_DIR, "assets/images/ring_icon.png")
 MALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/male_sprite.png")
 FEMALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/female_sprite.png")
+OPTIMISM_RING_EFFECT = os.path.join(ROOT_DIR, "assets/sprites/optimism_ring_effect.png")  # Added for Optimism Ring effect
 
-# Area-specific tilesheets (each 80x40, with wall at (0,0) and floor at (40,0))
-AREA_0_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_0_tilesheet.png")  # Dirt floor, wooden wall
-AREA_1_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_1_tilesheet.png")  # Grass floor, stone wall
-AREA_2_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_2_tilesheet.png")  # Stone floor, brick wall
-AREA_3_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_3_tilesheet.png")  # Purple dungeon floor, purple wall
-AREA_4_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_4_tilesheet.png")  # Dark stone floor, dark wall
-AREA_5_TILESHEET = os.path.join(ROOT_DIR, "assets/images/area_5_tilesheet.png")  # Water floor, dark stone wall
+# Area-specific floor and wall PNGs (32x32, will be scaled to 40x40)
+AREA_0_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_0_floor.png")  # Slums: dirt floor
+AREA_0_WALL = os.path.join(ROOT_DIR, "assets/images/area_0_wall.png")    # Slums: wooden wall
+AREA_1_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_1_floor.png")  # Spires: stone floor
+AREA_1_WALL = os.path.join(ROOT_DIR, "assets/images/area_1_wall.png")    # Spires: crystal wall
+AREA_2_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_2_floor.png")  # Ruins: brick floor
+AREA_2_WALL = os.path.join(ROOT_DIR, "assets/images/area_2_wall.png")    # Ruins: cracked stone wall
+AREA_3_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_3_floor.png")  # Echo: purple mystical floor
+AREA_3_WALL = os.path.join(ROOT_DIR, "assets/images/area_3_wall.png")    # Echo: glowing wall
+AREA_4_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_4_floor.png")  # Hideout: dark tech floor
+AREA_4_WALL = os.path.join(ROOT_DIR, "assets/images/area_4_wall.png")    # Hideout: metal wall
+AREA_5_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_5_floor.png")  # Lair: water floor
+AREA_5_WALL = os.path.join(ROOT_DIR, "assets/images/area_5_wall.png")    # Lair: dark stone wall
+
+# Attack visualization sprites
+MELEE_ATTACK_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/melee_attack_sprite.png")
+RANGED_ATTACK_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/ranged_attack_sprite.png")
 
 # Sprite paths for enemies, sword, tokens, checkpoints, fragments
 SAPA_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/sapa_sprite.png")
