@@ -37,6 +37,21 @@ def play_intro_cutscene(screen, clock, player, ui_background):
             pygame.display.flip()
             clock.tick(FPS)
 
+        # Add fade-out effect
+        fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        fade_surface.fill(BLACK)
+        for alpha in range(0, 255, 5):
+            fade_surface.set_alpha(alpha)
+            screen.blit(ui_background, (0, 0))
+            pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), 0)
+            screen.blit(fade_surface, (0, 0))
+            pygame.display.flip()
+            pygame.time.delay(20)
+
+        screen.fill(BLACK)
+        pygame.display.flip()
+        pygame.time.delay(500)
+
         print("Exiting intro_cutscene successfully.")
         return True
     except Exception as e:
@@ -46,6 +61,16 @@ def play_intro_cutscene(screen, clock, player, ui_background):
 def play_area_cutscene(screen, clock, player, area_id, ui_background):
     print(f"Entering play_area_cutscene for Area {area_id}...")
     try:
+        # Add fade-in effect
+        fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        fade_surface.fill(BLACK)
+        for alpha in range(255, 0, -5):
+            fade_surface.set_alpha(alpha)
+            screen.blit(ui_background, (0, 0))
+            screen.blit(fade_surface, (0, 0))
+            pygame.display.flip()
+            pygame.time.delay(20)
+
         pronoun = "he" if player.gender == "male" else "she"
         if area_id == 0:
             lines = [

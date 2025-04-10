@@ -93,6 +93,22 @@ class Maze:
         exit_side = opposite_sides[entry_side]
         entry = pick_opening(entry_side)
         exit_ = pick_opening(exit_side)
+
+        # Ensure entry and exit are at least 10 tiles apart
+        max_attempts = 100
+        attempt = 0
+        while attempt < max_attempts:
+            distance = ((entry[0] - exit_[0]) ** 2 + (entry[1] - exit_[1]) ** 2) ** 0.5
+            if distance >= 10:  # Minimum distance of 10 tiles
+                break
+            # If too close, re-pick the exit
+            exit_side = random.choice([s for s in sides if s != entry_side])
+            exit_ = pick_opening(exit_side)
+            attempt += 1
+
+        if attempt >= max_attempts:
+            print("Warning: Could not place entry and exit 10 tiles apart after maximum attempts. Using last positions.")
+
         return entry, exit_
 
     def is_connected(self, start, goal):
@@ -249,9 +265,9 @@ class Maze:
     def collides(self, rect):
         try:
             top_left_x = rect.x // TILE_SIZE
-            top_left_y = (rect.y - HUD_HEIGHT) // TILE_SIZE
+            top_left_y = max(0, min((rect.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
             bottom_right_x = (rect.x + rect.width - 1) // TILE_SIZE
-            bottom_right_y = (rect.y + rect.height - 1 - HUD_HEIGHT) // TILE_SIZE
+            bottom_right_y = max(0, min((rect.y + rect.height - 1 - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
 
             for y in range(max(0, top_left_y), min(self.height, bottom_right_y + 1)):
                 for x in range(max(0, top_left_x), min(self.width, bottom_right_x + 1)):
@@ -472,7 +488,8 @@ class Scene:
                 checkpoint = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
                 self.checkpoints.append(checkpoint)
 
-            if self.area_id == 0 and self.scene_id == 2 and self.vitalik_freed:
+            # Only place the sword in Area 0, Scene 4 if the player doesn't have it
+            if self.area_id == 0 and self.scene_id == 4 and not self.player.inventory.has_sword:
                 x, y = self.find_open_position()
                 self.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
 
@@ -495,24 +512,36 @@ class Scene:
                 elif self.area_id == 5:
                     self.boss = Skuld(self, self.player.level)
 
-            start = (self.player.rect.x // TILE_SIZE, (self.player.rect.y - HUD_HEIGHT) // TILE_SIZE)
+            # Ensure start and goal positions are within grid bounds
+            start_x = max(0, min(self.player.rect.x // TILE_SIZE, self.width - 1))
+            start_y = max(0, min((self.player.rect.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+            start = (start_x, start_y)
+
             for token in self.tokens:
-                goal = (token.x // TILE_SIZE, (token.y - HUD_HEIGHT) // TILE_SIZE)
+                goal_x = max(0, min(token.x // TILE_SIZE, self.width - 1))
+                goal_y = max(0, min((token.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+                goal = (goal_x, goal_y)
                 if not self.is_connected(start, goal):
                     print(f"Carving path to token at {goal}...")
                     self.carve_path(start, goal)
             for checkpoint in self.checkpoints:
-                goal = (checkpoint.x // TILE_SIZE, (checkpoint.y - HUD_HEIGHT) // TILE_SIZE)
+                goal_x = max(0, min(checkpoint.x // TILE_SIZE, self.width - 1))
+                goal_y = max(0, min((checkpoint.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+                goal = (goal_x, goal_y)
                 if not self.is_connected(start, goal):
                     print(f"Carving path to checkpoint at {goal}...")
                     self.carve_path(start, goal)
             if self.sword:
-                goal = (self.sword.x // TILE_SIZE, (self.sword.y - HUD_HEIGHT) // TILE_SIZE)
+                goal_x = max(0, min(self.sword.x // TILE_SIZE, self.width - 1))
+                goal_y = max(0, min((self.sword.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+                goal = (goal_x, goal_y)
                 if not self.is_connected(start, goal):
                     print(f"Carving path to sword at {goal}...")
                     self.carve_path(start, goal)
             for fragment in self.fragments:
-                goal = (fragment.x // TILE_SIZE, (fragment.y - HUD_HEIGHT) // TILE_SIZE)
+                goal_x = max(0, min(fragment.x // TILE_SIZE, self.width - 1))
+                goal_y = max(0, min((fragment.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+                goal = (goal_x, goal_y)
                 if not self.is_connected(start, goal):
                     print(f"Carving path to fragment at {goal}...")
                     self.carve_path(start, goal)
@@ -579,9 +608,13 @@ class Scene:
     def relocate_sword(self):
         print("Relocating sword...")
         try:
-            x, y = self.find_open_position()
-            self.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
-            print("Sword relocated successfully.")
+            # Only relocate the sword if the player doesn't have it
+            if not self.player.inventory.has_sword:
+                x, y = self.find_open_position()
+                self.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+                print("Sword relocated successfully.")
+            else:
+                print("Player already has the sword; not relocating.")
         except Exception as e:
             print(f"Error in Scene.relocate_sword: {e}")
             raise
@@ -592,22 +625,33 @@ class Scene:
             # Draw the area-specific background
             screen.blit(self.background, (0, 0))
 
+            # Calculate the playable area height (excluding HUD)
+            playable_height = SCREEN_HEIGHT - HUD_HEIGHT
+            # Calculate a scaling factor to fit the maze height within the playable area
+            tile_height = playable_height / self.height
+
             # Draw the maze using floor and wall tiles
             if self.wall_tile and self.floor_tile:
                 for y in range(self.height):
+                    # Calculate screen_y to fit within the playable area (HUD_HEIGHT to SCREEN_HEIGHT)
+                    screen_y = HUD_HEIGHT + y * tile_height
                     for x in range(self.width):
-                        screen_y = HUD_HEIGHT + y * TILE_SIZE
                         if self.grid[y][x] == 1:
-                            screen.blit(self.wall_tile, (x * TILE_SIZE, screen_y))
+                            # Scale the wall tile to the calculated tile_height
+                            scaled_wall = pygame.transform.scale(self.wall_tile, (TILE_SIZE, int(tile_height)))
+                            screen.blit(scaled_wall, (x * TILE_SIZE, int(screen_y)))
                         else:
-                            screen.blit(self.floor_tile, (x * TILE_SIZE, screen_y))
+                            # Scale the floor tile to the calculated tile_height
+                            scaled_floor = pygame.transform.scale(self.floor_tile, (TILE_SIZE, int(tile_height)))
+                            screen.blit(scaled_floor, (x * TILE_SIZE, int(screen_y)))
             else:
                 # Fallback to procedural rendering
                 for y in range(self.height):
+                    screen_y = HUD_HEIGHT + y * tile_height
                     for x in range(self.width):
                         if self.grid[y][x] == 1:
-                            screen_y = HUD_HEIGHT + y * TILE_SIZE
-                            pygame.draw.rect(screen, (100, 100, 100), (x * TILE_SIZE, screen_y, TILE_SIZE, TILE_SIZE))
+                            pygame.draw.rect(screen, (100, 100, 100),
+                                             (x * TILE_SIZE, int(screen_y), TILE_SIZE, int(tile_height)))
 
             # Draw tokens, checkpoints, sword, and fragments with sprites
             for token in self.tokens:
@@ -619,12 +663,14 @@ class Scene:
                 if self.checkpoint_sprite:
                     screen.blit(self.checkpoint_sprite, (checkpoint.x, checkpoint.y))
                 else:
-                    pygame.draw.rect(screen, (0, 255, 0), (checkpoint.x, checkpoint.y, checkpoint.width, checkpoint.height))
+                    pygame.draw.rect(screen, (0, 255, 0),
+                                     (checkpoint.x, checkpoint.y, checkpoint.width, checkpoint.height))
             if self.sword:
                 if self.sword_sprite:
                     screen.blit(self.sword_sprite, (self.sword.x, self.sword.y))
                 else:
-                    pygame.draw.rect(screen, (255, 255, 0), (self.sword.x, self.sword.y, self.sword.width, self.sword.height))
+                    pygame.draw.rect(screen, (255, 255, 0),
+                                     (self.sword.x, self.sword.y, self.sword.width, self.sword.height))
             for fragment in self.fragments:
                 if self.fragment_sprite:
                     screen.blit(self.fragment_sprite, (fragment.x, fragment.y))

@@ -118,13 +118,25 @@ class Player:
             # Draw sprite with shake offset
             draw_pos = (self.rect.x + self.shake_offset[0], self.rect.y + self.shake_offset[1])
             screen.blit(self.sprite, draw_pos)
+
+            # Draw Optimism Ring effect if active
             if self.optimism_ring_active:
                 if self.optimism_ring_sprite:
-                    # Center the sprite around the player
-                    sprite_pos = (self.rect.centerx - 40 + self.shake_offset[0], self.rect.centery - 40 + self.shake_offset[1])
-                    screen.blit(self.optimism_ring_sprite, sprite_pos)
+                    # Calculate pulsing alpha (128 to 255)
+                    alpha = int(128 + 127 * (pygame.time.get_ticks() % 1000) / 1000)  # Oscillates every second
+                    effect_surface = self.optimism_ring_sprite.copy()
+                    effect_surface.set_alpha(alpha)
+                    # Center the effect on the player
+                    sprite_pos = (
+                    self.rect.centerx - 40 + self.shake_offset[0], self.rect.centery - 40 + self.shake_offset[1])
+                    screen.blit(effect_surface, sprite_pos)
                 else:
-                    pygame.draw.circle(screen, (255, 255, 0), (self.rect.centerx + self.shake_offset[0], self.rect.centery + self.shake_offset[1]), 40, 2)
+                    # Fallback: Draw a pulsing circle
+                    alpha = int(128 + 127 * (pygame.time.get_ticks() % 1000) / 1000)
+                    circle_surface = pygame.Surface((80, 80), pygame.SRCALPHA)
+                    pygame.draw.circle(circle_surface, (255, 255, 0, alpha), (40, 40), 40, 2)
+                    screen.blit(circle_surface, (
+                    self.rect.centerx - 40 + self.shake_offset[0], self.rect.centery - 40 + self.shake_offset[1]))
             print("Player drawn successfully.")
         except Exception as e:
             print(f"Error in Player.draw: {e}")

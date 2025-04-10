@@ -45,6 +45,7 @@ HUD_RING_ICON = os.path.join(ROOT_DIR, "assets/images/ring_icon.png")
 MALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/male_sprite.png")
 FEMALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/female_sprite.png")
 OPTIMISM_RING_EFFECT = os.path.join(ROOT_DIR, "assets/sprites/optimism_ring_effect.png")  # Added for Optimism Ring effect
+EXIT_ARROW_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/exit_arrow.png")  # Added for exit arrow sprite
 
 # Area-specific floor and wall PNGs (32x32, will be scaled to 40x40)
 AREA_0_FLOOR = os.path.join(ROOT_DIR, "assets/images/area_0_floor.png")  # Slums: dirt floor
@@ -80,7 +81,15 @@ SWORD_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/sword_sprite.png")
 TOKEN_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/token_sprite.png")
 CHECKPOINT_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/checkpoint_sprite.png")
 FRAGMENT_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/fragment_sprite.png")
+SAPA_PROJECTILE = os.path.join(ROOT_DIR, "assets/sprites/sapa_projectile.png")  # Added for Sapa projectile
 
+# NPC sprites
+# NPC sprites
+VITALIK_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/vitalik_sprite.png")
+NPC_MALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/npc_male_sprite.png")  # New male NPC sprite
+NPC_FEMALE_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/npc_female_sprite.png")  # New female NPC sprite
+VENDOR_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/vendor_sprite.png")
+CRYPTO_SCHOLAR_SPRITE = os.path.join(ROOT_DIR, "assets/sprites/crypto_scholar_sprite.png")
 # Area-specific background paths
 AREA_0_BACKGROUND = os.path.join(ROOT_DIR, "assets/images/backgrounds/area_0_background.png")
 AREA_1_BACKGROUND = os.path.join(ROOT_DIR, "assets/images/backgrounds/area_1_background.png")

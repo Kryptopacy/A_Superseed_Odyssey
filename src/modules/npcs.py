@@ -2,7 +2,8 @@
 import pygame
 import random
 import sys
-from src.config import TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, FPS, UI_BACKGROUND
+import os
+from src.config import TILE_SIZE, MAZE_WIDTH, MAZE_HEIGHT, FPS, VITALIK_SPRITE, NPC_MALE_SPRITE, NPC_FEMALE_SPRITE ,VENDOR_SPRITE, CRYPTO_SCHOLAR_SPRITE
 
 class NPC:
     def __init__(self, scene, is_vitalik=False, is_vendor=False, is_crypto_scholar=False):
@@ -17,8 +18,41 @@ class NPC:
             self.invulnerable = True
             self.width = TILE_SIZE
             self.height = TILE_SIZE
-            self.image = pygame.Surface((self.width, self.height))
-            self.image.fill((255, 255, 0) if self.is_vitalik else (0, 255, 255))  # Cyan for NPCs, Yellow for Vitalik
+
+            # Assign gender for regular NPCs (not Vitalik, vendors, or crypto scholars)
+            self.gender = None
+            if not self.is_vitalik and not self.is_vendor and not self.is_crypto_scholar:
+                self.gender = random.choice(["male", "female"])
+
+            # Determine sprite path based on NPC type and gender
+            if self.is_vitalik:
+                sprite_path = VITALIK_SPRITE
+                fallback_color = (255, 255, 0)  # Yellow for Vitalik
+            elif self.is_vendor:
+                sprite_path = VENDOR_SPRITE
+                fallback_color = (0, 255, 255)  # Cyan for Vendor
+            elif self.is_crypto_scholar:
+                sprite_path = CRYPTO_SCHOLAR_SPRITE
+                fallback_color = (0, 255, 255)  # Cyan for Crypto Scholar
+            elif self.gender == "male":
+                sprite_path = NPC_MALE_SPRITE
+                fallback_color = (0, 255, 255)  # Cyan for Male NPC
+            else:  # gender == "female"
+                sprite_path = NPC_FEMALE_SPRITE
+                fallback_color = (0, 255, 255)  # Cyan for Female NPC
+
+            # Load sprite with fallback
+            try:
+                print(f"Attempting to load NPC sprite from: {sprite_path}")
+                if not os.path.exists(sprite_path):
+                    raise FileNotFoundError(f"File not found: {sprite_path}")
+                self.image = pygame.image.load(sprite_path).convert_alpha()
+                self.image = pygame.transform.scale(self.image, (self.width, self.height))
+            except (pygame.error, FileNotFoundError, Exception) as e:
+                print(f"Failed to load NPC sprite {sprite_path}: {e}. Using placeholder.")
+                self.image = pygame.Surface((self.width, self.height))
+                self.image.fill(fallback_color)
+
             self.rect = self.place_in_maze()
             self.vitalik_comment_timer = 0  # Timer for Vitalik's random comments
             self.vitalik_comment_interval = FPS * 30  # Comment every 30 seconds
@@ -152,20 +186,20 @@ class NPC:
     def draw(self, screen):
         print("Entering NPC.draw...")
         try:
-            if not self.is_vitalik or self.is_freed:
-                screen.blit(self.image, self.rect)
+            # Draw Vitalik even if not freed; other NPCs are always drawn
+            screen.blit(self.image, self.rect)
             print("NPC drawn successfully.")
         except Exception as e:
             print(f"Error in NPC.draw: {e}")
             raise
 
-def vitalik_cutscene(screen, clock, player, dialogue_box):
+def vitalik_cutscene(screen, clock, player, dialogue_box, ui_background):
     print("Entering vitalik_cutscene...")
     pronoun = "he" if player.gender == "male" else "she"
     lines = [
         f"Vitalik: I am Sage Vitalik, trapped by the Sapa curse.",
         f"You, {player.name}, have been bitten—your time is short.",
-        f"The Sword of Solvency can halt the curse, but only the Superseed fragments can cure you.",
+        f"The Sword of Solvency can halt the curse, but only the Superseed fragments can cure {pronoun}.",
         "Complete a trial to free me, and I’ll guide you. Press SPACE to continue, or ESC to close."
     ]
     dialogue_box.show(lines)
@@ -183,7 +217,7 @@ def vitalik_cutscene(screen, clock, player, dialogue_box):
                     print("Vitalik cutscene skipped by user.")
                     return False
 
-        screen.blit(UI_BACKGROUND, (0, 0))
+        screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
         pygame.display.flip()
         clock.tick(FPS)
@@ -191,7 +225,7 @@ def vitalik_cutscene(screen, clock, player, dialogue_box):
     print("Exiting vitalik_cutscene...")
     return True
 
-def vitalik_choice(screen, clock, player, dialogue_box):
+def vitalik_choice(screen, clock, player, dialogue_box, ui_background):
     print("Entering vitalik_choice...")
     lines = [
         f"Vitalik: You’ve braved many dangers to claim the Sword of Solvency, {player.name}.",
@@ -215,7 +249,7 @@ def vitalik_choice(screen, clock, player, dialogue_box):
                 elif event.key == pygame.K_n and not dialogue_box.active:
                     choice = "world"
 
-        screen.blit(UI_BACKGROUND, (0, 0))
+        screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
         pygame.display.flip()
         clock.tick(FPS)

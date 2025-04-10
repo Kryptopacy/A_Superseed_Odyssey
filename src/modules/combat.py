@@ -1,7 +1,7 @@
 # src/modules/combat.py
 import pygame
 import os
-from src.config import TILE_SIZE, FPS, MELEE_ATTACK_SPRITE, RANGED_ATTACK_SPRITE
+from src.config import TILE_SIZE, FPS, MELEE_ATTACK_SPRITE, RANGED_ATTACK_SPRITE, SOUND_ENEMY_HIT
 from src.modules.enemies import SplitterSapa
 
 class CombatSystem:

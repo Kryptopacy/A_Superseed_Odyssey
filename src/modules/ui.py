@@ -1,8 +1,10 @@
 # src/modules/ui.py
 import pygame
 import sys
-from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WHITE, BLACK, GOLD, DEFAULT_FONT
+from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WHITE, BLACK, GOLD, DEFAULT_FONT, TILE_SIZE, SOUND_CUTSCENE_MUSIC, SOUND_GAME_MUSIC
 from src.utils import wrap_text
+from src.modules.npcs import NPC
+from src.modules.game_state import save_game, load_game
 
 class DialogueBox:
     def __init__(self):
@@ -13,7 +15,7 @@ class DialogueBox:
             self.font = pygame.font.SysFont(DEFAULT_FONT, 36)
             self.speaker_font = pygame.font.SysFont(DEFAULT_FONT, 24, bold=True)
             self.prompt_font = pygame.font.SysFont(DEFAULT_FONT, 20)
-        except:
+        except pygame.error:
             print(f"Failed to load font '{DEFAULT_FONT}'. Using default font.")
             self.font = pygame.font.Font(None, 36)
             self.speaker_font = pygame.font.Font(None, 24)
@@ -115,23 +117,19 @@ def show_tutorial(screen, dialogue_box, ui_background):
                 print(f"Key pressed in tutorial: {event.key}")
                 if event.key == pygame.K_SPACE:
                     dialogue_box.next_line()
+                elif event.key == pygame.K_ESCAPE:
+                    dialogue_box.active = False
 
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
         pygame.display.flip()
 
-def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints, music_volume, sfx_volume):
+def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints, music_volume, sfx_volume, vitalik_freed, choice_made, self_save_choice_made, vitalik, current_scene):
     print("Showing pause menu...")
-    try:
-        font = pygame.font.SysFont("Arial", 36)
-    except:
-        print("Failed to load font 'Arial'. Using default font.")
-        font = pygame.font.Font(None, 36)
-
     options = ["Resume", "Tutorial", "Toggle Minimap", "Toggle Easy Mode", "Restart", "Adjust Sound", "Save Game", "Load Game", "Quit"]
     settings_options = ["Toggle Easy Mode", "Back"]
     restart_options = ["Restart from Checkpoint", "Restart Area", "Back"]
-    sound_options = ["Music Volume Up", "Music Volume Down", "SFX Volume Up", "SFX Volume Down", "Back"]
+    sound_options = ["Music Volume Up", "Music Volume Down", "SFX Volume Up", "SFX Volume Down", "Mute", "Back"]
     selected = 0
     in_settings = False
     in_restart = False
@@ -139,15 +137,15 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
     running = True
     show_minimap = False
 
-    while running:
-        current_options = options
-        if in_settings:
-            current_options = settings_options
-        elif in_restart:
-            current_options = restart_options
-        elif in_sound:
-            current_options = sound_options
+    # Ensure dialogue box is not active to allow immediate navigation
+    dialogue_box.active = False
 
+    while running:
+        current_options = options if not in_settings and not in_restart and not in_sound else \
+                          settings_options if in_settings else \
+                          restart_options if in_restart else sound_options
+
+        # Prepare the lines for display
         lines = []
         if in_sound:
             lines.append(f"Music Volume: {int(music_volume * 100)}%")
@@ -159,7 +157,7 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                 lines.append(f"{prefix}Toggle Easy Mode: {mode}")
             else:
                 lines.append(f"{prefix}{option}")
-        dialogue_box.show(lines)
+        dialogue_box.show(lines, show_prompt=False)  # Show without prompt to avoid SPACE/ESC behavior
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -168,13 +166,13 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 print(f"Key pressed in pause menu: {event.key}")
-                if event.key == pygame.K_SPACE and dialogue_box.active:
-                    dialogue_box.next_line()
-                elif event.key == pygame.K_UP and not dialogue_box.active:
+                if event.key == pygame.K_ESCAPE:
+                    running = False  # Exit the pause menu to resume the game
+                elif event.key == pygame.K_UP:
                     selected = (selected - 1) % len(current_options)
-                elif event.key == pygame.K_DOWN and not dialogue_box.active:
+                elif event.key == pygame.K_DOWN:
                     selected = (selected + 1) % len(current_options)
-                elif event.key == pygame.K_RETURN and not dialogue_box.active:
+                elif event.key == pygame.K_RETURN:
                     if in_settings:
                         if current_options[selected] == "Toggle Easy Mode":
                             player.easy_mode = not player.easy_mode
@@ -193,9 +191,8 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                             player.rect.x, player.rect.y = start_x, start_y
                             player.hp = 100
                             player.infection_level = 50
-                            player.inventory.supercollateral = 0
-                            player.inventory.fragments = 0
-                            player.inventory.has_sword = False
+                            if vitalik and vitalik.following:
+                                vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
                             running = False
                         elif current_options[selected] == "Back":
                             in_restart = False
@@ -211,6 +208,11 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                             sfx_volume = min(1.0, sfx_volume + 0.1)
                         elif current_options[selected] == "SFX Volume Down":
                             sfx_volume = max(0.0, sfx_volume - 0.1)
+                        elif current_options[selected] == "Mute":
+                            music_volume = 0.0
+                            sfx_volume = 0.0
+                            pygame.mixer.music.set_volume(music_volume)
+                            dialogue_box.show(["Sound muted!"])
                         elif current_options[selected] == "Back":
                             in_sound = False
                             selected = 0
@@ -303,3 +305,68 @@ def prompt_easy_mode(screen, dialogue_box, player, ui_background):
         screen.blit(prompt_shadow, (prompt_rect.x + 2, prompt_rect.y + 2))
         screen.blit(prompt_text, prompt_rect)
         pygame.display.flip()
+
+def prompt_game_over(screen, dialogue_box, player, world, checkpoints, ui_background):
+    print("Prompting game over...")
+    # Switch to cutscene music for game over
+    pygame.mixer.music.stop()
+    try:
+        pygame.mixer.music.load(SOUND_CUTSCENE_MUSIC)
+        pygame.mixer.music.play(-1)
+        print("Cutscene music loaded and playing for game over.")
+    except pygame.error as e:
+        print(f"Failed to load cutscene music for game over: {e}. Continuing without music.")
+
+    has_checkpoint = checkpoints.has_checkpoint()
+    message = ["Vitalik: Infection has taken over! Choose an option:"]
+    dialogue_box.show(message, show_prompt=False)
+    choice_made = False
+    choice = None
+
+    prompt_font = pygame.font.SysFont(DEFAULT_FONT, 20)
+    prompt_text = prompt_font.render(f"S: Start Over | R: Restart from Checkpoint{' (Available)' if has_checkpoint else ''} | A: Restart Area | ESC: Quit", True, WHITE)
+    prompt_shadow = prompt_font.render(f"S: Start Over | R: Restart from Checkpoint{' (Available)' if has_checkpoint else ''} | A: Restart Area | ESC: Quit", True, BLACK)
+    prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+
+    while not choice_made:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print("Quit event in game over prompt.")
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                print(f"Key pressed in game over prompt: {event.key}")
+                if event.key == pygame.K_s:
+                    choice = "start_over"
+                    choice_made = True
+                elif event.key == pygame.K_r and has_checkpoint:
+                    choice = "resume"
+                    choice_made = True
+                elif event.key == pygame.K_a:
+                    choice = "restart_area"
+                    choice_made = True
+                elif event.key == pygame.K_ESCAPE:
+                    print("Game over prompt closed by user.")
+                    pygame.quit()
+                    sys.exit()
+
+        screen.blit(ui_background, (0, 0))
+        dialogue_box.draw(screen)
+        screen.blit(prompt_shadow, (prompt_rect.x + 2, prompt_rect.y + 2))
+        screen.blit(prompt_text, prompt_rect)
+        pygame.display.flip()
+
+    dialogue_box.active = False
+    dialogue_box.lines = []
+    dialogue_box.current_line = 0
+
+    # Restore game music after game over prompt
+    pygame.mixer.music.stop()
+    try:
+        pygame.mixer.music.load(SOUND_GAME_MUSIC)
+        pygame.mixer.music.play(-1)
+        print("Game music restored after game over prompt.")
+    except pygame.error as e:
+        print(f"Failed to load game music after game over: {e}. Continuing without music.")
+
+    return choice
