@@ -267,9 +267,10 @@ class Maze:
             playable_height = SCREEN_HEIGHT - HUD_HEIGHT
             tile_height = playable_height / self.height
             top_left_x = rect.x // TILE_SIZE
-            top_left_y = max(0, min((rect.y - HUD_HEIGHT) // tile_height, self.height - 1))
+            # Correctly map the y-coordinate to the maze grid, accounting for HUD_HEIGHT and scaled tile_height
+            top_left_y = max(0, min((rect.y - HUD_HEIGHT) / tile_height, self.height - 1))
             bottom_right_x = (rect.x + rect.width - 1) // TILE_SIZE
-            bottom_right_y = max(0, min((rect.y + rect.height - 1 - HUD_HEIGHT) // tile_height, self.height - 1))
+            bottom_right_y = max(0, min((rect.y + rect.height - 1 - HUD_HEIGHT) / tile_height, self.height - 1))
 
             for y in range(max(0, int(top_left_y)), min(self.height, int(bottom_right_y) + 1)):
                 for x in range(max(0, top_left_x), min(self.width, bottom_right_x + 1)):
