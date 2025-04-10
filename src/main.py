@@ -16,7 +16,7 @@ from src.modules.game_state import save_game, load_game
 from src.modules.setup import get_player_info
 from src.modules.interactions import vendor_interaction, play_sword_puzzle, play_vitalik_puzzle, play_quest_minigame, final_cutscene, get_minigames
 from src.modules.rendering import draw_ui, draw_labels, draw_exits, draw_minimap, apply_critical_tint
-from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE, WHITE, BLACK, GOLD, HUD_HEART_ICON, HUD_COIN_ICON, HUD_VIRUS_ICON, HUD_RING_ICON, MALE_SPRITE, FEMALE_SPRITE, DEFAULT_FONT, UI_BACKGROUND, MAZE_WIDTH, MAZE_HEIGHT, SOUND_GAME_MUSIC, SOUND_CUTSCENE_MUSIC, HUD_HEIGHT, SAPA_PROJECTILE
+from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE, WHITE, BLACK, GOLD, HUD_HEART_ICON, HUD_COIN_ICON, HUD_VIRUS_ICON, HUD_RING_ICON, MALE_SPRITE, FEMALE_SPRITE, EXIT_ARROW_SPRITE , DEFAULT_FONT, UI_BACKGROUND, MAZE_WIDTH, MAZE_HEIGHT, SOUND_GAME_MUSIC, SOUND_CUTSCENE_MUSIC, HUD_HEIGHT, SAPA_PROJECTILE
 
 def main():
     print("Starting game...")
@@ -122,6 +122,18 @@ def main():
     else:
         player_name, player_gender, player_sprite = get_player_info(screen)
     print(f"Player info collected: Name={player_name}, Gender={player_gender}")
+
+    # Load Exit Arrow sprite
+    exit_arrow_sprite = None
+    try:
+        print(f"Attempting to load exit arrow sprite from: {EXIT_ARROW_SPRITE}")
+        if not os.path.exists(EXIT_ARROW_SPRITE):
+            raise FileNotFoundError(f"File not found: {EXIT_ARROW_SPRITE}")
+        exit_arrow_sprite = pygame.image.load(EXIT_ARROW_SPRITE).convert_alpha()
+        exit_arrow_sprite = pygame.transform.scale(exit_arrow_sprite, (30, 30))
+    except (pygame.error, FileNotFoundError, Exception) as e:
+        print(f"Failed to load exit arrow sprite at {EXIT_ARROW_SPRITE}. Error: {e}. Using placeholder.")
+        exit_arrow_sprite = None
 
     try:
         print("Creating Player object...")
@@ -438,21 +450,27 @@ def main():
             entry_x, entry_y = current_scene.entry
             exit_x, exit_y = current_scene.exit
 
+            # Calculate tile_height to match Scene.draw
+            playable_height = SCREEN_HEIGHT - HUD_HEIGHT
+            tile_height = playable_height / MAZE_HEIGHT
+
             # Adjust entry_rect and exit_rect to cover the entire opening (2 tiles wide/tall)
             if entry_x == 0:  # Left side
-                entry_rect = pygame.Rect(0, (entry_y * TILE_SIZE) + HUD_HEIGHT, TILE_SIZE, 2 * TILE_SIZE)
+                entry_rect = pygame.Rect(0, (entry_y * tile_height) + HUD_HEIGHT, TILE_SIZE, 2 * tile_height)
             elif entry_y == 0:  # Top side
-                entry_rect = pygame.Rect(entry_x * TILE_SIZE, HUD_HEIGHT, 2 * TILE_SIZE, TILE_SIZE)
-            else:
-                entry_rect = pygame.Rect(entry_x * TILE_SIZE, (entry_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, TILE_SIZE)
+                entry_rect = pygame.Rect(entry_x * TILE_SIZE, HUD_HEIGHT, 2 * TILE_SIZE, tile_height)
+            else:  # Bottom side
+                entry_rect = pygame.Rect(entry_x * TILE_SIZE, (entry_y * tile_height) + HUD_HEIGHT, 2 * TILE_SIZE,
+                                         tile_height)
 
             if exit_x == MAZE_WIDTH - 1:  # Right side
-                exit_rect = pygame.Rect((exit_x * TILE_SIZE), (exit_y * TILE_SIZE) + HUD_HEIGHT, TILE_SIZE, 2 * TILE_SIZE)
+                exit_rect = pygame.Rect((exit_x * TILE_SIZE), (exit_y * tile_height) + HUD_HEIGHT, TILE_SIZE,
+                                        2 * tile_height)
             elif exit_y == MAZE_HEIGHT - 1:  # Bottom side
-                # Ensure the exit_rect covers the full 2-tile height of the opening
-                exit_rect = pygame.Rect(exit_x * TILE_SIZE, (exit_y * TILE_SIZE) + HUD_HEIGHT - TILE_SIZE, 2 * TILE_SIZE, 2 * TILE_SIZE)
-            else:
-                exit_rect = pygame.Rect(exit_x * TILE_SIZE, (exit_y * TILE_SIZE) + HUD_HEIGHT, 2 * TILE_SIZE, TILE_SIZE)
+                exit_rect = pygame.Rect(exit_x * TILE_SIZE, SCREEN_HEIGHT - 2 * tile_height, 2 * TILE_SIZE,
+                                        2 * tile_height)
+            else:  # Top side
+                exit_rect = pygame.Rect(exit_x * TILE_SIZE, HUD_HEIGHT, 2 * TILE_SIZE, tile_height)
 
             # Debug entry/exit collision
             if "west" in current_scene.exits and player.rect.colliderect(entry_rect):
@@ -472,7 +490,47 @@ def main():
             if "east" in current_scene.exits and player.rect.colliderect(exit_rect):
                 # Prevent moving east from Area 0, Scene 2 if Vitalik is not freed
                 if world.current_area == 0 and world.current_scene == 2 and not vitalik_freed:
+                    paused = True  # Pause the game to handle the prompt
                     dialogue_box.show(["Vitalik: You must free me before we can proceed! Press E to interact."])
+                    while dialogue_box.active:
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
+                                print("Quit event in prompt.")
+                                game_over = True
+                                break
+                            if event.type == pygame.KEYDOWN:
+                                if event.key == pygame.K_SPACE:
+                                    dialogue_box.next_line()
+                                elif event.key == pygame.K_ESCAPE:
+                                    dialogue_box.active = False
+                        screen.fill(BLACK)
+                        current_scene.draw(screen)
+                        for sapa in sapas:
+                            sapa.draw(screen)
+                        for proj in projectiles:
+                            rect, dx, dy = proj
+                            if sapa_projectile_sprite:
+                                screen.blit(sapa_projectile_sprite, (rect.x, rect.y))
+                            else:
+                                pygame.draw.rect(screen, (255, 0, 0), rect)
+                        if current_scene.npc:
+                            current_scene.npc.draw(screen)
+                        if hasattr(current_scene, 'npcs'):
+                            for npc in current_scene.npcs:
+                                npc.draw(screen)
+                        player.draw(screen)
+                        combat.draw(screen)
+                        draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring_icon,
+                                infection_active)
+                        draw_labels(screen, current_scene, player, font)
+                        draw_exits(screen, current_scene, font, exit_arrow_sprite)
+                        if show_minimap:
+                            draw_minimap(screen, current_scene, player, font)
+                        apply_critical_tint(screen, infection_active, player)
+                        dialogue_box.draw(screen)
+                        pygame.display.flip()
+                        clock.tick(FPS)
+                    paused = False
                     continue
                 print(f"Player collided with exit at ({exit_x}, {exit_y}), moving east. Exit rect: {exit_rect}")
                 world.move_to_scene("east")
@@ -793,7 +851,7 @@ def main():
         combat.draw(screen)
         draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring_icon, infection_active)
         draw_labels(screen, current_scene, player, font)
-        draw_exits(screen, current_scene, font)
+        draw_exits(screen, current_scene, font, exit_arrow_sprite)  # Pass exit_arrow_sprite here
         if show_minimap:
             draw_minimap(screen, current_scene, player, font)
         apply_critical_tint(screen, infection_active, player)

@@ -50,8 +50,10 @@ class NPC:
                 self.image = pygame.transform.scale(self.image, (self.width, self.height))
             except (pygame.error, FileNotFoundError, Exception) as e:
                 print(f"Failed to load NPC sprite {sprite_path}: {e}. Using placeholder.")
-                self.image = pygame.Surface((self.width, self.height))
+                self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
                 self.image.fill(fallback_color)
+                # Add a border to ensure visibility
+                pygame.draw.rect(self.image, (255, 255, 255), (0, 0, self.width, self.height), 2)
 
             self.rect = self.place_in_maze()
             self.vitalik_comment_timer = 0  # Timer for Vitalik's random comments

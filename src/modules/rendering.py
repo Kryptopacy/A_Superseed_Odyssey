@@ -141,21 +141,9 @@ def draw_labels(screen, scene, player, font):
             pygame.draw.rect(screen, (0, 0, 0, 180), label_rect.inflate(4, 4))
             screen.blit(label, label_rect)
 
-def draw_exits(screen, scene, font):
+def draw_exits(screen, scene, font, exit_arrow_sprite):
     entry_x, entry_y = scene.entry
     exit_x, exit_y = scene.exit
-
-    # Load exit arrow sprite from config
-    exit_arrow_sprite = None
-    try:
-        print(f"Attempting to load exit arrow sprite from: {EXIT_ARROW_SPRITE}")
-        if not os.path.exists(EXIT_ARROW_SPRITE):
-            raise FileNotFoundError(f"File not found: {EXIT_ARROW_SPRITE}")
-        exit_arrow_sprite = pygame.image.load(EXIT_ARROW_SPRITE).convert_alpha()
-        exit_arrow_sprite = pygame.transform.scale(exit_arrow_sprite, (30, 30))
-    except (pygame.error, FileNotFoundError, Exception) as e:
-        print(f"Failed to load exit arrow sprite at {EXIT_ARROW_SPRITE}. Error: {e}. Using fallback.")
-        exit_arrow_sprite = None
 
     if "west" in scene.exits:
         if entry_x == 0:  # Left side
@@ -172,6 +160,13 @@ def draw_exits(screen, scene, font):
                 pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, HUD_HEIGHT + 20), (entry_x * TILE_SIZE + TILE_SIZE - 10, HUD_HEIGHT + 40), (entry_x * TILE_SIZE + TILE_SIZE + 10, HUD_HEIGHT + 40)])
             exit_text = font.render("Previous Scene", True, WHITE)
             screen.blit(exit_text, (entry_x * TILE_SIZE + TILE_SIZE - 40, HUD_HEIGHT + 30))
+        else:  # Bottom side
+            if exit_arrow_sprite:
+                screen.blit(pygame.transform.rotate(exit_arrow_sprite, -90), (entry_x * TILE_SIZE + TILE_SIZE - 15, SCREEN_HEIGHT - 70))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, SCREEN_HEIGHT - 50), (entry_x * TILE_SIZE + TILE_SIZE - 10, SCREEN_HEIGHT - 70), (entry_x * TILE_SIZE + TILE_SIZE + 10, SCREEN_HEIGHT - 70)])
+            exit_text = font.render("Previous Scene", True, WHITE)
+            screen.blit(exit_text, (entry_x * TILE_SIZE + TILE_SIZE - 40, SCREEN_HEIGHT - 60))
 
     if "east" in scene.exits:
         if exit_x == MAZE_WIDTH - 1:  # Right side
@@ -188,6 +183,13 @@ def draw_exits(screen, scene, font):
                 pygame.draw.polygon(screen, WHITE, [(exit_x * TILE_SIZE + TILE_SIZE, SCREEN_HEIGHT - 50), (exit_x * TILE_SIZE + TILE_SIZE - 10, SCREEN_HEIGHT - 70), (exit_x * TILE_SIZE + TILE_SIZE + 10, SCREEN_HEIGHT - 70)])
             exit_text = font.render("Next Scene", True, WHITE)
             screen.blit(exit_text, (exit_x * TILE_SIZE + TILE_SIZE - 40, SCREEN_HEIGHT - 60))
+        else:  # Top side
+            if exit_arrow_sprite:
+                screen.blit(pygame.transform.rotate(exit_arrow_sprite, 90), (exit_x * TILE_SIZE + TILE_SIZE - 15, HUD_HEIGHT + 20))
+            else:
+                pygame.draw.polygon(screen, WHITE, [(exit_x * TILE_SIZE + TILE_SIZE, HUD_HEIGHT + 20), (exit_x * TILE_SIZE + TILE_SIZE - 10, HUD_HEIGHT + 40), (exit_x * TILE_SIZE + TILE_SIZE + 10, HUD_HEIGHT + 40)])
+            exit_text = font.render("Next Scene", True, WHITE)
+            screen.blit(exit_text, (exit_x * TILE_SIZE + TILE_SIZE - 40, HUD_HEIGHT + 30))
 
 def draw_minimap(screen, scene, player, font):
     print("Drawing minimap...")
