@@ -223,8 +223,13 @@ def main():
     # Place Vitalik in Area 0, Scene 2, and multiple regular NPCs in the same scene
     for area in world.areas:
         for scene in area.scenes:
-            if area.area_id == 0 and scene.scene_id == 2 and not vitalik_freed:
+            # Always place Vitalik and NPCs in Area 0, Scene 2, but adjust behavior based on vitalik_freed
+            if area.area_id == 0 and scene.scene_id == 2:
+                # Place Vitalik
                 scene.npc = NPC(scene, is_vitalik=True)
+                if vitalik_freed:
+                    scene.npc.is_freed = True
+                    scene.npc.following = True
                 # Add multiple regular NPCs to show people escaping the Sapa
                 scene.npcs = []
                 # First NPC with specific lore
@@ -482,7 +487,9 @@ def main():
                 if vitalik and vitalik.following:
                     vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
                 current_scene.sapas.clear()
-                current_scene.npcs = []  # Reset NPCs
+                # Do not reset NPCs if moving within Area 0
+                if world.current_area != 0 or world.current_scene != 2:
+                    current_scene.npcs = []
                 current_scene.sword = None  # Reset sword
                 current_scene.minigame = None  # Reset minigame
                 projectiles.clear()
@@ -520,8 +527,7 @@ def main():
                                 npc.draw(screen)
                         player.draw(screen)
                         combat.draw(screen)
-                        draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring_icon,
-                                infection_active)
+                        draw_ui(screen, player, world, font, heart_icon, coin_icon, virus_icon, ring_icon, infection_active)
                         draw_labels(screen, current_scene, player, font)
                         draw_exits(screen, current_scene, font, exit_arrow_sprite)
                         if show_minimap:
@@ -540,7 +546,9 @@ def main():
                 if vitalik and vitalik.following:
                     vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
                 current_scene.sapas.clear()
-                current_scene.npcs = []  # Reset NPCs
+                # Do not reset NPCs if moving within Area 0
+                if world.current_area != 0 or world.current_scene != 2:
+                    current_scene.npcs = []
                 # Only reset the sword if the player doesn't have it and hasn't chosen the "world" option
                 if not player.inventory.has_sword or not world_choice_made:
                     current_scene.sword = None
