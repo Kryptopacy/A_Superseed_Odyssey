@@ -1,24 +1,21 @@
-# src/modules/interactions.py
 import pygame
 import sys
 import random
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WHITE, BLACK, DEFAULT_FONT
 from src.modules.ui import DialogueBox
-from src.modules.minigames.hash_dash import play_hash_dash
-from src.modules.minigames.collateral_lock import play_collateral_lock
-from src.modules.minigames.gas_fee_gauntlet import play_gas_fee_gauntlet
+from src.modules.minigames.complete_the_seed import play_complete_the_seed
+from src.modules.minigames.sapa_dodge import play_sapa_dodge
 from src.modules.minigames.anagram import play_anagram
 from src.modules.minigames.memory_sequence import play_memory_sequence
 from src.modules.minigames.color_match import play_color_match
 
 def get_minigames():
     return [
-        play_hash_dash,
-        play_collateral_lock,
-        play_gas_fee_gauntlet,
-        play_anagram,
-        play_memory_sequence,
-        play_color_match
+        {"func": play_complete_the_seed, "requires_gender": False},
+        {"func": play_sapa_dodge, "requires_gender": True},
+        {"func": play_anagram, "requires_gender": False},
+        {"func": play_memory_sequence, "requires_gender": False},
+        {"func": play_color_match, "requires_gender": False}
     ]
 
 def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_background):
@@ -45,7 +42,7 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
                 lines.append(f"{i+1}: {option}: {upgrade['description']} (Cost: {upgrade['cost']}) - Press {i+1} to buy")
             else:
                 lines.append(f"{len(options)}: Exit - Press {len(options)} to leave or ESC to close")
-        dialogue_box.show(lines, show_prompt=False)
+        dialogue_box.show(lines, show_prompt=False, context="vendor")
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -68,9 +65,9 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
                                     player.attack_power += upgrade["value"]
                                 elif options[selected] == "Ranged Attacks":
                                     player.ranged_attacks += upgrade["value"]
-                                dialogue_box.show([f"Vendor: Purchased {options[selected]}!"])
+                                dialogue_box.show([f"Vendor: Purchased {options[selected]}!"], context="default")
                             else:
-                                dialogue_box.show(["Vendor: Not enough Supercollateral!"])
+                                dialogue_box.show(["Vendor: Not enough Supercollateral!"], context="default")
                 elif event.key == pygame.K_ESCAPE:
                     running = False
 
@@ -86,11 +83,11 @@ def vendor_interaction(screen, clock, player, vendor, dialogue_box, ui_backgroun
     print("Exiting vendor_interaction...")
     return True
 
-def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
+def play_sword_puzzle(screen, clock, dialogue_box, ui_background, player_gender):
     print("Entering play_sword_puzzle...")
     minigames = get_minigames()
-    selected_minigame = random.choice(minigames)
-    dialogue_box.show(["Vitalik: A puzzle guards the Sword of Solvency! Solve it to proceed. Press Y to start, N to skip, or ESC to close."])
+    available_minigames = minigames.copy()
+    dialogue_box.show(["Vitalik: A puzzle guards the Sword of Solvency! Solve it to proceed. Press Y to start, N to skip, or ESC to close."], context="default")
     choice_made = False
     result = False
 
@@ -101,11 +98,33 @@ def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
                 return False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_y:
-                    if callable(selected_minigame) and selected_minigame(screen, clock):
-                        result = True
-                        choice_made = True
-                    else:
-                        dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                    while available_minigames:
+                        selected_minigame = random.choice(available_minigames)
+                        try:
+                            if selected_minigame["requires_gender"]:
+                                puzzle_result = selected_minigame["func"](screen, clock, player_gender)
+                            else:
+                                puzzle_result = selected_minigame["func"](screen, clock)
+                            if puzzle_result is True:
+                                result = True
+                                choice_made = True
+                                break
+                            elif puzzle_result is False:
+                                dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                break
+                            elif puzzle_result is None:
+                                dialogue_box.show(["Vitalik: Puzzle cancelled. Try again. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                break
+                        except Exception as e:
+                            print(f"Error in play_sword_puzzle with minigame {selected_minigame['func'].__name__}: {e}")
+                            available_minigames.remove(selected_minigame)
+                            if not available_minigames:
+                                dialogue_box.show(["Vitalik: All puzzles failed! You cannot proceed."], context="default")
+                                choice_made = True
+                                result = False
+                                break
+                            dialogue_box.show(["Vitalik: That puzzle failed to load. Let's try another one. Press Y to continue, N to skip, or ESC to close."], context="default")
+                            break
                 elif event.key == pygame.K_n:
                     choice_made = True
                 elif event.key == pygame.K_ESCAPE:
@@ -122,11 +141,11 @@ def play_sword_puzzle(screen, clock, dialogue_box, ui_background):
     print("Exiting play_sword_puzzle...")
     return result
 
-def play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
+def play_vitalik_puzzle(screen, clock, dialogue_box, ui_background, player_gender):
     print("Entering play_vitalik_puzzle...")
     minigames = get_minigames()
-    selected_minigame = random.choice(minigames)
-    dialogue_box.show(["Vitalik: I’m trapped! Solve this puzzle to free me. Press Y to start, N to skip, or ESC to close."])
+    available_minigames = minigames.copy()
+    dialogue_box.show(["Vitalik: I’m trapped! Solve this puzzle to free me. Press Y to start, N to skip, or ESC to close."], context="default")
     choice_made = False
     result = False
 
@@ -137,11 +156,33 @@ def play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
                 return False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_y:
-                    if callable(selected_minigame) and selected_minigame(screen, clock):
-                        result = True
-                        choice_made = True
-                    else:
-                        dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                    while available_minigames:
+                        selected_minigame = random.choice(available_minigames)
+                        try:
+                            if selected_minigame["requires_gender"]:
+                                puzzle_result = selected_minigame["func"](screen, clock, player_gender)
+                            else:
+                                puzzle_result = selected_minigame["func"](screen, clock)
+                            if puzzle_result is True:
+                                result = True
+                                choice_made = True
+                                break
+                            elif puzzle_result is False:
+                                dialogue_box.show(["Vitalik: Puzzle failed! Try again. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                break
+                            elif puzzle_result is None:
+                                dialogue_box.show(["Vitalik: Puzzle cancelled. Try again. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                break
+                        except Exception as e:
+                            print(f"Error in play_vitalik_puzzle with minigame {selected_minigame['func'].__name__}: {e}")
+                            available_minigames.remove(selected_minigame)
+                            if not available_minigames:
+                                dialogue_box.show(["Vitalik: All puzzles failed! You cannot proceed."], context="default")
+                                choice_made = True
+                                result = False
+                                break
+                            dialogue_box.show(["Vitalik: That puzzle failed to load. Let's try another one. Press Y to continue, N to skip, or ESC to close."], context="default")
+                            break
                 elif event.key == pygame.K_n:
                     choice_made = True
                 elif event.key == pygame.K_ESCAPE:
@@ -158,9 +199,12 @@ def play_vitalik_puzzle(screen, clock, dialogue_box, ui_background):
     print("Exiting play_vitalik_puzzle...")
     return result
 
-def play_quest_minigame(screen, clock, dialogue_box, ui_background, minigame_func, player):
+def play_quest_minigame(screen, clock, dialogue_box, ui_background, minigame_dict, player, player_gender):
     print("Entering play_quest_minigame...")
-    dialogue_box.show(["NPC: Complete this challenge for a reward! Press Y to start, N to skip, or ESC to close."])
+    minigame_func = minigame_dict["func"]
+    requires_gender = minigame_dict["requires_gender"]
+    available_minigames = get_minigames().copy()
+    dialogue_box.show(["NPC: Complete this challenge for a reward! Press Y to start, N to skip, or ESC to close."], context="default")
     choice_made = False
     reward = 10  # Supercollateral reward for completing the minigame
 
@@ -171,12 +215,34 @@ def play_quest_minigame(screen, clock, dialogue_box, ui_background, minigame_fun
                 return False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_y:
-                    if callable(minigame_func) and minigame_func(screen, clock):
-                        player.inventory.add_supercollateral(reward)
-                        dialogue_box.show([f"NPC: Well done! Here's your reward: {reward} Supercollateral."])
-                        return True
-                    else:
-                        dialogue_box.show(["NPC: Challenge failed! Try again. Press Y to retry, N to skip, or ESC to close."])
+                    while available_minigames:
+                        minigame_dict = available_minigames[available_minigames.index({"func": minigame_func, "requires_gender": requires_gender})]
+                        try:
+                            if requires_gender:
+                                minigame_result = minigame_func(screen, clock, player_gender)
+                            else:
+                                minigame_result = minigame_func(screen, clock)
+                            if minigame_result is True:
+                                player.inventory.add_supercollateral(reward)
+                                dialogue_box.show([f"NPC: Well done! Here's your reward: {reward} Supercollateral."], context="default")
+                                return True
+                            elif minigame_result is False:
+                                dialogue_box.show(["NPC: Challenge failed! Try again. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                return False
+                            elif minigame_result is None:
+                                dialogue_box.show(["NPC: Challenge cancelled. Press Y to retry, N to skip, or ESC to close."], context="default")
+                                return False
+                        except Exception as e:
+                            print(f"Error in play_quest_minigame with minigame {minigame_func.__name__}: {e}")
+                            available_minigames.remove(minigame_dict)
+                            if not available_minigames:
+                                dialogue_box.show(["NPC: All challenges failed to load. No reward this time."], context="default")
+                                return False
+                            minigame_dict = random.choice(available_minigames)
+                            minigame_func = minigame_dict["func"]
+                            requires_gender = minigame_dict["requires_gender"]
+                            dialogue_box.show(["NPC: That challenge failed to load. Let's try another one. Press Y to continue, N to skip, or ESC to close."], context="default")
+                            break
                 elif event.key == pygame.K_n:
                     return False
                 elif event.key == pygame.K_ESCAPE:
@@ -205,7 +271,7 @@ def final_cutscene(screen, clock, player, ui_background):
         f"Vitalik: Thank you for playing A Superseed Odyssey!"
     ]
     dialogue_box = DialogueBox()
-    dialogue_box.show(lines)
+    dialogue_box.show(lines, context="default")
     running = True
 
     while running and dialogue_box.active:

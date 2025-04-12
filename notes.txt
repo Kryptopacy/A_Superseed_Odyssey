@@ -1,0 +1,2 @@
+- update to add option to start afresh or start from checkpoint. currently just instantly loads the checkpoint found
+- add menu to allow player select story mode or play arcade mode of the minigames

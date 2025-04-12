@@ -1,4 +1,3 @@
-# src/modules/enemies.py
 import pygame
 import random
 import math
@@ -14,10 +13,9 @@ class Enemy:
         self.width = width
         self.height = height
         self.speed = speed
-        # Scale HP and damage with player level
-        self.hp = int(base_hp * (1 + player_level * 0.2))  # 20% increase per player level
-        self.damage = int(2 * (1 + player_level * 0.1))  # 10% increase per player level
-        self.level = player_level  # Enemy level matches player level
+        self.hp = int(base_hp * (1 + player_level * 0.2))
+        self.damage = int(2 * (1 + player_level * 0.1))
+        self.level = player_level
         self.rect = self.place_in_maze()
         try:
             print(f"Attempting to load sprite from: {sprite_path}")
@@ -32,26 +30,73 @@ class Enemy:
         self.attack_cooldown = 0
         self.attack_cooldown_max = FPS
         self.direction = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
-        self.hit_timer = 0  # For flashing effect when hit
+        self.hit_timer = 0
+        self.patrol_timer = 0
+        self.patrol_interval = FPS * 3
 
     def place_in_maze(self):
         max_attempts = 100
         attempt = 0
+        # Divide the scene into quadrants to ensure distribution
+        quadrants = [
+            (0, MAZE_WIDTH // 2, 0, MAZE_HEIGHT // 2),  # Top-left
+            (MAZE_WIDTH // 2, MAZE_WIDTH, 0, MAZE_HEIGHT // 2),  # Top-right
+            (0, MAZE_WIDTH // 2, MAZE_HEIGHT // 2, MAZE_HEIGHT),  # Bottom-left
+            (MAZE_WIDTH // 2, MAZE_WIDTH, MAZE_HEIGHT // 2, MAZE_HEIGHT)  # Bottom-right
+        ]
+        # Choose a quadrant based on the number of Sapas already in each quadrant
+        quadrant_counts = [0] * 4
+        for sapa in self.scene.sapas:
+            for i, (x_min, x_max, y_min, y_max) in enumerate(quadrants):
+                if x_min * TILE_SIZE <= sapa.rect.x < x_max * TILE_SIZE and \
+                   y_min * TILE_SIZE <= (sapa.rect.y - HUD_HEIGHT) < y_max * TILE_SIZE:
+                    quadrant_counts[i] += 1
+                    break
+        # Prefer the quadrant with the fewest Sapas
+        min_count = min(quadrant_counts)
+        possible_quadrants = [i for i, count in enumerate(quadrant_counts) if count == min_count]
+        chosen_quadrant = random.choice(possible_quadrants)
+        x_min, x_max, y_min, y_max = quadrants[chosen_quadrant]
+
         while attempt < max_attempts:
-            x = random.randint(0, MAZE_WIDTH - 1) * TILE_SIZE
-            y = random.randint(0, MAZE_HEIGHT - 1) * TILE_SIZE + HUD_HEIGHT
+            x = random.randint(x_min, x_max - 1) * TILE_SIZE
+            y = random.randint(y_min, y_max - 1) * TILE_SIZE + HUD_HEIGHT
             rect = pygame.Rect(x, y, self.width, self.height)
             entry_x, entry_y = self.scene.entry
             exit_x, exit_y = self.scene.exit
             entry_distance = ((x - entry_x * TILE_SIZE) ** 2 + (y - (entry_y * TILE_SIZE + HUD_HEIGHT)) ** 2) ** 0.5
             exit_distance = ((x - exit_x * TILE_SIZE) ** 2 + (y - (exit_y * TILE_SIZE + HUD_HEIGHT)) ** 2) ** 0.5
             player_distance = ((x - self.scene.player.rect.x) ** 2 + (y - self.scene.player.rect.y) ** 2) ** 0.5
-            if not self.scene.maze.collides(rect) and entry_distance > 100 and exit_distance > 100 and player_distance > 200:
+            too_close_to_sapa = False
+            for sapa in self.scene.sapas:
+                sapa_distance = ((x - sapa.rect.x) ** 2 + (y - sapa.rect.y) ** 2) ** 0.5
+                if sapa_distance < 200:  # Increased minimum distance to 200 pixels
+                    too_close_to_sapa = True
+                    break
+            if (not self.scene.maze.collides(rect) and
+                entry_distance > 100 and
+                exit_distance > 100 and
+                player_distance > 150 and  # Relaxed player distance to ensure placement
+                not too_close_to_sapa):
+                return rect
+            attempt += 1
+        # Fallback: Relax constraints if no position found
+        attempt = 0
+        while attempt < max_attempts:
+            x = random.randint(0, MAZE_WIDTH - 1) * TILE_SIZE
+            y = random.randint(0, MAZE_HEIGHT - 1) * TILE_SIZE + HUD_HEIGHT
+            rect = pygame.Rect(x, y, self.width, self.height)
+            if not self.scene.maze.collides(rect):
                 return rect
             attempt += 1
         return pygame.Rect(TILE_SIZE, TILE_SIZE + HUD_HEIGHT, self.width, self.height)
 
     def move(self, maze, player):
+        self.patrol_timer += 1
+        if self.patrol_timer >= self.patrol_interval:
+            self.direction = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+            self.patrol_timer = 0
+
         new_rect = self.rect.copy()
         dx, dy = self.direction
         new_rect.x += dx * self.speed
@@ -61,6 +106,7 @@ class Enemy:
             self.rect = new_rect
         else:
             self.direction = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+            self.patrol_timer = 0
 
     def attack(self, player):
         if self.attack_cooldown > 0:
@@ -73,12 +119,11 @@ class Enemy:
 
     def take_damage(self, damage):
         self.hp -= damage
-        self.hit_timer = 10  # Flash for 10 frames
+        self.hit_timer = 10
         return self.hp <= 0
 
     def draw(self, screen):
         if self.hit_timer > 0:
-            # Flash effect: alternate between normal and white
             if self.hit_timer % 2 == 0:
                 temp_surface = pygame.Surface((self.width, self.height))
                 temp_surface.fill((255, 255, 255))
@@ -200,7 +245,6 @@ class BossArea2(Enemy):
         if self.sweep_cooldown > 0:
             self.sweep_cooldown -= 1
             return super().attack(player)
-        # Sweeping attack: create a wide projectile
         sweep_rect = pygame.Rect(self.rect.centerx - 50, self.rect.centery - 50, 100, 100)
         self.sweep_cooldown = self.sweep_cooldown_max
         return (sweep_rect, 0, 0)
@@ -215,7 +259,6 @@ class BossArea3(Enemy):
         if self.minion_cooldown > 0:
             self.minion_cooldown -= 1
             return super().attack(player)
-        # Summon two Sapas
         self.minion_cooldown = self.minion_cooldown_max
         minion1 = Sapa(self.scene, self.level)
         minion2 = Sapa(self.scene, self.level)
@@ -260,7 +303,6 @@ class BossArea5(Enemy):
         if self.circle_cooldown > 0:
             self.circle_cooldown -= 1
             return super().attack(player)
-        # Fire projectiles in a circle
         projectiles = []
         for angle in range(0, 360, 45):
             rad = math.radians(angle)
@@ -284,7 +326,7 @@ class Skuld(Enemy):
 
     def attack(self, player):
         attacks = []
-        if self.hp > 75:  # Phase 1: Projectiles
+        if self.hp > 75:
             if self.projectile_cooldown > 0:
                 self.projectile_cooldown -= 1
             else:
@@ -297,7 +339,7 @@ class Skuld(Enemy):
                     projectile = pygame.Rect(self.rect.centerx, self.rect.centery, 15, 15)
                     attacks.append((projectile, dx * 2, dy * 2))
                     self.projectile_cooldown = self.projectile_cooldown_max
-        elif self.hp > 50:  # Phase 2: Summon minions
+        elif self.hp > 50:
             if self.minion_cooldown > 0:
                 self.minion_cooldown -= 1
             else:
@@ -309,7 +351,7 @@ class Skuld(Enemy):
                 minion2.rect.y = self.rect.y
                 attacks.extend([minion1, minion2])
                 self.minion_cooldown = self.minion_cooldown_max
-        else:  # Phase 3: Sweeping attack
+        else:
             if self.sweep_cooldown > 0:
                 self.sweep_cooldown -= 1
             else:

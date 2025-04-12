@@ -1,4 +1,3 @@
-# src/modules/world.py
 import pygame
 import random
 import os
@@ -12,7 +11,8 @@ from src.modules.enemies import Sapa, SplitterSapa, ProjectileSapa, ChaserSapa, 
 from collections import deque
 
 class Maze:
-    def __init__(self, num_crosses=8, cross_size_range=(1, 3), shape_weights=None, min_cross_distance=2, min_path_length=15):
+    def __init__(self, num_crosses=8, cross_size_range=(1, 3), shape_weights=None, min_cross_distance=2,
+                 min_path_length=5):  # Reduced min_path_length to 5
         print("Entering Maze.__init__...")
         try:
             self.width = MAZE_WIDTH
@@ -30,18 +30,7 @@ class Maze:
             )
             if not self.is_connected(self.entry, self.exit):
                 print("Connectivity broken, carving fallback path...")
-                x, y = self.entry
-                gx, gy = self.exit
-                while (x, y) != (gx, gy):
-                    if x < gx:
-                        x += 1
-                    elif x > gx:
-                        x -= 1
-                    if y < gy:
-                        y += 1
-                    elif y > gy:
-                        y -= 1
-                    self.grid[y][x] = 0
+                self.carve_path(self.entry, self.exit)
             print("Maze initialized successfully.")
         except Exception as e:
             print(f"Error in Maze.__init__: {e}")
@@ -63,47 +52,57 @@ class Maze:
         sides = ["top", "bottom", "left", "right"]
         opposite_sides = {"top": "bottom", "bottom": "top", "left": "right", "right": "left"}
 
-        def pick_opening(side):
+        def pick_opening(side, opposite_pos=None):
             if side == "top":
-                x = random.randrange(1, width - 3)
+                x = random.randrange(1, width - 3) if opposite_pos is None else (width - 1 - opposite_pos)
                 y = 0
                 for i in range(x, x + 2):
                     self.grid[y][i] = 0
                 return (x + 1, y)
             elif side == "bottom":
-                x = random.randrange(1, width - 3)
+                x = random.randrange(1, width - 3) if opposite_pos is None else (width - 1 - opposite_pos)
                 y = height - 1
                 for i in range(x, x + 2):
                     self.grid[y][i] = 0
                 return (x + 1, y)
             elif side == "left":
                 x = 0
-                y = random.randrange(1, height - 3)
+                y = random.randrange(1, height - 3) if opposite_pos is None else (height - 1 - opposite_pos)
                 for i in range(y, y + 2):
                     self.grid[i][x] = 0
                 return (x, y + 1)
             else:  # "right"
                 x = width - 1
-                y = random.randrange(1, height - 3)
+                y = random.randrange(1, height - 3) if opposite_pos is None else (height - 1 - opposite_pos)
                 for i in range(y, y + 2):
                     self.grid[i][x] = 0
                 return (x, y + 1)
 
         entry_side = random.choice(sides)
         exit_side = opposite_sides[entry_side]
-        entry = pick_opening(entry_side)
-        exit_ = pick_opening(exit_side)
 
-        # Ensure entry and exit are at least 10 tiles apart
+        entry = pick_opening(entry_side)
+
+        if entry_side in ["top", "bottom"]:
+            opposite_pos = entry[0]
+        else:
+            opposite_pos = entry[1]
+        exit_ = pick_opening(exit_side, opposite_pos)
+
         max_attempts = 100
         attempt = 0
         while attempt < max_attempts:
             distance = ((entry[0] - exit_[0]) ** 2 + (entry[1] - exit_[1]) ** 2) ** 0.5
-            if distance >= 10:  # Minimum distance of 10 tiles
+            if distance >= 10:
                 break
-            # If too close, re-pick the exit
-            exit_side = random.choice([s for s in sides if s != entry_side])
-            exit_ = pick_opening(exit_side)
+            entry_side = random.choice(sides)
+            exit_side = opposite_sides[entry_side]
+            entry = pick_opening(entry_side)
+            if entry_side in ["top", "bottom"]:
+                opposite_pos = entry[0]
+            else:
+                opposite_pos = entry[1]
+            exit_ = pick_opening(exit_side, opposite_pos)
             attempt += 1
 
         if attempt >= max_attempts:
@@ -124,7 +123,7 @@ class Maze:
                 return True
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 nx, ny = x + dx, y + dy
-                if 0 <= nx < width and 0 <= ny < height:
+                if 0 <= nx < width and 0 <= ny < height:  # Simplified to 1x1 for connectivity check
                     if self.grid[ny][nx] == 0 and not visited[ny][nx]:
                         visited[ny][nx] = True
                         queue.append((nx, ny))
@@ -214,7 +213,7 @@ class Maze:
         width = len(self.grid[0])
         placed = 0
         attempts = 0
-        max_attempts = num_crosses * 100
+        max_attempts = num_crosses * 200  # Increased attempts
         placed_centers = []
 
         if shape_weights is None:
@@ -239,6 +238,7 @@ class Maze:
             if any(self.grid[y][x] != 0 for (x, y) in candidate_cells):
                 continue
 
+            # Removed aggressive expansion to reduce path blocking
             for (x, y) in candidate_cells:
                 self.grid[y][x] = 1
 
@@ -259,21 +259,62 @@ class Maze:
             print(f"Placed obstacle {placed}/{num_crosses}: Shape {shape_type} at ({cx}, {cy})")
 
         if placed < num_crosses:
-            print(f"Warning: Only placed {placed}/{num_crosses} obstacles after {attempts} attempts.")
+            print(f"Warning: Only placed {placed}/{num_crosses} obstacles after {attempts} attempts. Adding single-tile obstacles as fallback.")
+            # Fallback: Place single-tile obstacles
+            remaining = num_crosses - placed
+            attempts = 0
+            max_fallback_attempts = remaining * 100
+            while placed < num_crosses and attempts < max_fallback_attempts:
+                attempts += 1
+                cx = random.randint(1, width - 2)
+                cy = random.randint(1, height - 2)
+                if self.grid[cy][cx] != 0:
+                    continue
+                self.grid[cy][cx] = 1
+                if not self.is_connected(entry, exit_):
+                    self.grid[cy][cx] = 0
+                    continue
+                if min_path_length is not None:
+                    path_length = self.bfs_distance(entry, exit_)
+                    if path_length is None or path_length < min_path_length:
+                        self.grid[cy][cx] = 0
+                        continue
+                placed += 1
+                print(f"Placed fallback single-tile obstacle {placed}/{num_crosses} at ({cx}, {cy})")
+
+        if placed < num_crosses:
+            print(f"Warning: Only placed {placed}/{num_crosses} obstacles after all attempts.")
         return self.grid
+
+    def carve_path(self, start, goal):
+        x, y = start
+        gx, gy = goal
+        while (x, y) != (gx, gy):
+            if x < gx:
+                x += 1
+            elif x > gx:
+                x -= 1
+            if y < gy:
+                y += 1
+            elif y > gy:
+                y -= 1
+            for dx in range(2):
+                for dy in range(2):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        self.grid[ny][nx] = 0
 
     def collides(self, rect):
         try:
             playable_height = SCREEN_HEIGHT - HUD_HEIGHT
             tile_height = playable_height / self.height
             top_left_x = rect.x // TILE_SIZE
-            # Use TILE_SIZE for vertical mapping to align with player's rect height
-            top_left_y = max(0, min((rect.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+            top_left_y = max(0, min((rect.y - HUD_HEIGHT) // tile_height, self.height - 1))
             bottom_right_x = (rect.x + rect.width - 1) // TILE_SIZE
-            bottom_right_y = max(0, min((rect.y + rect.height - 1 - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
+            bottom_right_y = max(0, min((rect.y + rect.height - 1 - HUD_HEIGHT) // tile_height, self.height - 1))
 
             for y in range(max(0, int(top_left_y)), min(self.height, int(bottom_right_y) + 1)):
-                for x in range(max(0, top_left_x), min(self.width, bottom_right_x + 1)):
+                for x in range(max(0, int(top_left_x)), min(self.width, int(bottom_right_x) + 1)):
                     if self.grid[y][x] == 1:
                         return True
             return False
@@ -291,7 +332,7 @@ class Maze:
             while attempt < max_attempts:
                 x = random.randint(max(1, entry_x - radius), min(self.width - 2, entry_x + radius))
                 y = random.randint(max(1, entry_y - radius), min(self.height - 2, entry_y + radius))
-                if self.grid[y][x] == 0:
+                if self.grid[y][x] == 0 and self.grid[y][x + 1] == 0:
                     screen_x = x * TILE_SIZE
                     screen_y = y * TILE_SIZE + HUD_HEIGHT
                     return screen_x, screen_y
@@ -305,17 +346,18 @@ class Maze:
     def find_open_position(self):
         print("Finding open position...")
         try:
-            max_attempts = 100
+            max_attempts = 200
             attempt = 0
             while attempt < max_attempts:
                 x = random.randint(1, self.width - 2)
                 y = random.randint(1, self.height - 2)
-                if self.grid[y][x] == 0:
+                if self.grid[y][x] == 0 and self.grid[y][x + 1] == 0:
                     entry_distance = ((x - self.entry[0]) ** 2 + (y - self.entry[1]) ** 2) ** 0.5
                     exit_distance = ((x - self.exit[0]) ** 2 + (y - self.exit[1]) ** 2) ** 0.5
-                    if entry_distance > 5 and exit_distance > 5:
+                    if entry_distance > 3 and exit_distance > 3:
                         screen_x = x * TILE_SIZE
                         screen_y = y * TILE_SIZE + HUD_HEIGHT
+                        print(f"Found open position at ({screen_x}, {screen_y})")
                         return screen_x, screen_y
                 attempt += 1
             print("Warning: Failed to find open position after maximum attempts. Using default (1, 1).")
@@ -346,7 +388,6 @@ class Scene:
             self.exits = {}
             self.vitalik_freed = vitalik_freed
 
-            # Load area-specific background
             background_paths = {
                 0: AREA_0_BACKGROUND,
                 1: AREA_1_BACKGROUND,
@@ -371,9 +412,8 @@ class Scene:
                     b = 59 + (y / SCREEN_HEIGHT) * (100 - 59)
                     pygame.draw.line(self.background, (int(r), int(g), int(b)), (0, y), (SCREEN_WIDTH, y))
 
-            # Generate random maze with fewer obstacles for boss scenes (Scene 4)
-            if self.scene_id == 4:  # Boss scene
-                self.maze = Maze(num_crosses=2)  # Fewer obstacles for boss fights
+            if self.scene_id == 4:
+                self.maze = Maze(num_crosses=2)
             else:
                 self.maze = Maze()
             self.grid = self.maze.grid
@@ -382,7 +422,6 @@ class Scene:
             self.entry = self.maze.entry
             self.exit = self.maze.exit
 
-            # Load area-specific floor and wall PNGs
             floor_paths = {
                 0: AREA_0_FLOOR,
                 1: AREA_1_FLOOR,
@@ -418,7 +457,6 @@ class Scene:
             except (pygame.error, FileNotFoundError, Exception) as e:
                 print(f"Failed to load floor/wall tiles: {e}. Will use procedural rendering.")
 
-            # Load sprites for sword, tokens, checkpoints, fragments
             try:
                 print(f"Attempting to load sword sprite from: {SWORD_SPRITE}")
                 if not os.path.exists(SWORD_SPRITE):
@@ -469,10 +507,14 @@ class Scene:
     def setup_exits(self):
         print("Setting up exits...")
         try:
-            if self.scene_id > 0:
-                self.exits["west"] = (self.area_id, self.scene_id - 1)
             if self.scene_id < 4:
                 self.exits["east"] = (self.area_id, self.scene_id + 1)
+            elif self.scene_id == 4 and self.area_id == 0:
+                if self.player.inventory.has_sword and hasattr(self.player,
+                                                               'world_choice_made') and self.player.world_choice_made:
+                    self.exits["east"] = (self.area_id + 1, 0)
+            elif self.scene_id == 4 and self.area_id > 0 and self.area_id < 5:
+                self.exits["east"] = (self.area_id + 1, 0)
             print(f"Exits set: {self.exits}")
         except Exception as e:
             print(f"Error in Scene.setup_exits: {e}")
@@ -491,31 +533,30 @@ class Scene:
                 checkpoint = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
                 self.checkpoints.append(checkpoint)
 
-            # Only place the sword in Area 0, Scene 4 if the player doesn't have it
             if self.area_id == 0 and self.scene_id == 4 and not self.player.inventory.has_sword:
                 x, y = self.find_open_position()
                 self.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
+                print(f"Sword placed at ({x}, {y}) in Area 0, Scene 4")
 
-            if self.scene_id == 4:
+            if self.scene_id == 4 and self.area_id > 0 and hasattr(self.player,
+                                                                   'world_choice_made') and self.player.world_choice_made:
                 x, y = self.find_open_position()
                 fragment = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
                 self.fragments.append(fragment)
 
-                # Place a boss at fragment locations, passing player.level
-                if self.area_id == 0:
+                if self.area_id == 1:
                     self.boss = BossArea1(self, self.player.level)
-                elif self.area_id == 1:
-                    self.boss = BossArea2(self, self.player.level)
                 elif self.area_id == 2:
-                    self.boss = BossArea3(self, self.player.level)
+                    self.boss = BossArea2(self, self.player.level)
                 elif self.area_id == 3:
-                    self.boss = BossArea4(self, self.player.level)
+                    self.boss = BossArea3(self, self.player.level)
                 elif self.area_id == 4:
-                    self.boss = BossArea5(self, self.player.level)
+                    self.boss = BossArea4(self, self.player.level)
                 elif self.area_id == 5:
+                    self.boss = BossArea5(self, self.player.level)
+                elif self.area_id == 6:
                     self.boss = Skuld(self, self.player.level)
 
-            # Ensure start and goal positions are within grid bounds
             start_x = max(0, min(self.player.rect.x // TILE_SIZE, self.width - 1))
             start_y = max(0, min((self.player.rect.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
             start = (start_x, start_y)
@@ -524,30 +565,38 @@ class Scene:
                 goal_x = max(0, min(token.x // TILE_SIZE, self.width - 1))
                 goal_y = max(0, min((token.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
                 goal = (goal_x, goal_y)
-                if not self.is_connected(start, goal):
+                if not self.maze.is_connected(start, goal):
                     print(f"Carving path to token at {goal}...")
-                    self.carve_path(start, goal)
+                    self.maze.carve_path(start, goal)
             for checkpoint in self.checkpoints:
                 goal_x = max(0, min(checkpoint.x // TILE_SIZE, self.width - 1))
                 goal_y = max(0, min((checkpoint.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
                 goal = (goal_x, goal_y)
-                if not self.is_connected(start, goal):
+                if not self.maze.is_connected(start, goal):
                     print(f"Carving path to checkpoint at {goal}...")
-                    self.carve_path(start, goal)
+                    self.maze.carve_path(start, goal)
             if self.sword:
                 goal_x = max(0, min(self.sword.x // TILE_SIZE, self.width - 1))
                 goal_y = max(0, min((self.sword.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
                 goal = (goal_x, goal_y)
-                if not self.is_connected(start, goal):
+                if not self.maze.is_connected(start, goal):
                     print(f"Carving path to sword at {goal}...")
-                    self.carve_path(start, goal)
+                    self.maze.carve_path(start, goal)
             for fragment in self.fragments:
                 goal_x = max(0, min(fragment.x // TILE_SIZE, self.width - 1))
                 goal_y = max(0, min((fragment.y - HUD_HEIGHT) // TILE_SIZE, self.height - 1))
                 goal = (goal_x, goal_y)
-                if not self.is_connected(start, goal):
+                if not self.maze.is_connected(start, goal):
                     print(f"Carving path to fragment at {goal}...")
-                    self.carve_path(start, goal)
+                    self.maze.carve_path(start, goal)
+
+            exit_x = max(0, min(self.exit[0], self.width - 1))
+            exit_y = max(0, min(self.exit[1], self.height - 1))
+            exit_goal = (exit_x, exit_y)
+            if not self.maze.is_connected(start, exit_goal):
+                print(f"Carving path to exit at {exit_goal}...")
+                self.maze.carve_path(start, exit_goal)
+
             print("Elements placed successfully.")
         except Exception as e:
             print(f"Error in Scene.place_elements: {e}")
@@ -589,17 +638,18 @@ class Scene:
     def find_open_position(self):
         print("Finding open position...")
         try:
-            max_attempts = 100
+            max_attempts = 200
             attempt = 0
             while attempt < max_attempts:
                 x = random.randint(1, self.width - 2)
                 y = random.randint(1, self.height - 2)
-                if self.grid[y][x] == 0:
+                if self.grid[y][x] == 0 and self.grid[y][x + 1] == 0:
                     entry_distance = ((x - self.entry[0]) ** 2 + (y - self.entry[1]) ** 2) ** 0.5
                     exit_distance = ((x - self.exit[0]) ** 2 + (y - self.exit[1]) ** 2) ** 0.5
-                    if entry_distance > 5 and exit_distance > 5:
+                    if entry_distance > 3 and exit_distance > 3:
                         screen_x = x * TILE_SIZE
                         screen_y = y * TILE_SIZE + HUD_HEIGHT
+                        print(f"Found open position at ({screen_x}, {screen_y})")
                         return screen_x, screen_y
                 attempt += 1
             print("Warning: Failed to find open position after maximum attempts. Using default (1, 1).")
@@ -611,7 +661,6 @@ class Scene:
     def relocate_sword(self):
         print("Relocating sword...")
         try:
-            # Only relocate the sword if the player doesn't have it
             if not self.player.inventory.has_sword:
                 x, y = self.find_open_position()
                 self.sword = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
@@ -625,38 +674,31 @@ class Scene:
     def draw(self, screen):
         print("Drawing scene...")
         try:
-            # Draw the area-specific background
             screen.blit(self.background, (0, 0))
-
-            # Calculate the playable area height (excluding HUD)
             playable_height = SCREEN_HEIGHT - HUD_HEIGHT
-            # Calculate a scaling factor to fit the maze height within the playable area
             tile_height = playable_height / self.height
 
-            # Draw the maze using floor and wall tiles
             if self.wall_tile and self.floor_tile:
                 for y in range(self.height):
-                    # Calculate screen_y to fit within the playable area (HUD_HEIGHT to SCREEN_HEIGHT)
                     screen_y = HUD_HEIGHT + y * tile_height
                     for x in range(self.width):
-                        if self.grid[y][x] == 1:
-                            # Scale the wall tile to the calculated tile_height
-                            scaled_wall = pygame.transform.scale(self.wall_tile, (TILE_SIZE, int(tile_height)))
-                            screen.blit(scaled_wall, (x * TILE_SIZE, int(screen_y)))
-                        else:
-                            # Scale the floor tile to the calculated tile_height
+                        if self.grid[y][x] == 0:
                             scaled_floor = pygame.transform.scale(self.floor_tile, (TILE_SIZE, int(tile_height)))
                             screen.blit(scaled_floor, (x * TILE_SIZE, int(screen_y)))
+                        else:
+                            scaled_wall = pygame.transform.scale(self.wall_tile, (TILE_SIZE, int(tile_height)))
+                            screen.blit(scaled_wall, (x * TILE_SIZE, int(screen_y)))
             else:
-                # Fallback to procedural rendering
                 for y in range(self.height):
                     screen_y = HUD_HEIGHT + y * tile_height
                     for x in range(self.width):
                         if self.grid[y][x] == 1:
                             pygame.draw.rect(screen, (100, 100, 100),
                                              (x * TILE_SIZE, int(screen_y), TILE_SIZE, int(tile_height)))
+                        else:
+                            pygame.draw.rect(screen, (50, 50, 50),
+                                             (x * TILE_SIZE, int(screen_y), TILE_SIZE, int(tile_height)))
 
-            # Draw tokens, checkpoints, sword, and fragments with sprites
             for token in self.tokens:
                 if self.token_sprite:
                     screen.blit(self.token_sprite, (token.x, token.y))
@@ -699,7 +741,9 @@ class Area:
             }
             self.name = area_names.get(area_id, f"Unknown Region {area_id}")
             self.scenes = [Scene(area_id, scene_id, player, vitalik_freed) for scene_id in range(5)]
-            print(f"Area {area_id} initialized with {len(self.scenes)} scenes.")
+            self.sapa_free_scene = 2 if self.area_id == 0 else random.randint(0, 3) if self.area_id in range(1,
+                                                                                                             6) else None
+            print(f"Area {area_id} initialized with {len(self.scenes)} scenes. Sapa-free scene: {self.sapa_free_scene}")
         except Exception as e:
             print(f"Error in Area.__init__: {e}")
             raise

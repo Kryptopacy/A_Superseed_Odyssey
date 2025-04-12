@@ -1,4 +1,3 @@
-# src/modules/ui.py
 import pygame
 import sys
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WHITE, BLACK, GOLD, DEFAULT_FONT, TILE_SIZE, SOUND_CUTSCENE_MUSIC, SOUND_GAME_MUSIC
@@ -11,6 +10,7 @@ class DialogueBox:
         self.active = False
         self.lines = []
         self.current_line = 0
+        self.context = "default"
         try:
             self.font = pygame.font.SysFont(DEFAULT_FONT, 36)
             self.speaker_font = pygame.font.SysFont(DEFAULT_FONT, 24, bold=True)
@@ -23,11 +23,12 @@ class DialogueBox:
         self.max_width = int(SCREEN_WIDTH * 0.8) - 20
         self.show_prompt = True
 
-    def show(self, lines, show_prompt=True):
+    def show(self, lines, show_prompt=True, context="default"):
         self.lines = lines
         self.current_line = 0
         self.active = True
         self.show_prompt = show_prompt
+        self.context = context
 
     def next_line(self):
         self.current_line += 1
@@ -38,10 +39,15 @@ class DialogueBox:
         if not self.active or self.current_line >= len(self.lines):
             return
 
-        box_width = int(SCREEN_WIDTH * 0.8)
-        box_height = 150
-        box_x = (SCREEN_WIDTH - box_width) // 2
-        box_y = SCREEN_HEIGHT - box_height - 20
+        box_width = int(SCREEN_WIDTH * 0.9) if self.context in ("menu", "vendor") else int(SCREEN_WIDTH * 0.8)
+        if self.context in ("menu", "vendor"):
+            box_height = max(150, len(self.lines) * 40 + 60)
+            box_x = (SCREEN_WIDTH - box_width) // 2
+            box_y = (SCREEN_HEIGHT - box_height) // 2
+        else:
+            box_height = 150
+            box_x = (SCREEN_WIDTH - box_width) // 2
+            box_y = SCREEN_HEIGHT - box_height - 20
 
         dialogue_box = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
         dialogue_box.fill((0, 0, 0, 180))
@@ -55,46 +61,67 @@ class DialogueBox:
         screen.blit(glow_surface, (box_x - 10, box_y - 10))
         screen.blit(dialogue_box, (box_x, box_y))
 
-        line = self.lines[self.current_line]
-        if ": " in line:
-            speaker, text = line.split(": ", 1)
-            speaker_text = self.speaker_font.render(speaker + ": ", True, GOLD)
-            speaker_shadow = self.speaker_font.render(speaker + ": ", True, BLACK)
-            wrapped_lines = wrap_text(text, self.font, self.max_width - speaker_text.get_width())
-            screen.blit(speaker_shadow, (box_x + 12, box_y + 12))
-            screen.blit(speaker_text, (box_x + 10, box_y + 10))
-            for i, wrapped_line in enumerate(wrapped_lines):
-                # Highlight action keys in gold
-                parts = wrapped_line.split()
-                x_offset = speaker_text.get_width() + 10
-                for part in parts:
-                    color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5") else WHITE
-                    text_surface = self.font.render(part + " ", True, color)
-                    text_shadow = self.font.render(part + " ", True, BLACK)
-                    screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
-                    screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
-                    x_offset += text_surface.get_width()
+        if self.context in ("menu", "vendor"):
+            for i, line in enumerate(self.lines):
+                wrapped_lines = wrap_text(line, self.font, self.max_width)
+                for j, wrapped_line in enumerate(wrapped_lines):
+                    parts = wrapped_line.split()
+                    x_offset = 10
+                    for part in parts:
+                        color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5", "T", "M", "E", "Q", "L", "V") else WHITE
+                        text_surface = self.font.render(part + " ", True, color)
+                        text_shadow = self.font.render(part + " ", True, BLACK)
+                        screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + (i * len(wrapped_lines) + j) * 40))
+                        screen.blit(text_surface, (box_x + x_offset, box_y + 10 + (i * len(wrapped_lines) + j) * 40))
+                        x_offset += text_surface.get_width()
         else:
-            wrapped_lines = wrap_text(line, self.font, self.max_width)
-            for i, wrapped_line in enumerate(wrapped_lines):
-                # Highlight action keys in gold
-                parts = wrapped_line.split()
-                x_offset = 10
-                for part in parts:
-                    color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5") else WHITE
-                    text_surface = self.font.render(part + " ", True, color)
-                    text_shadow = self.font.render(part + " ", True, BLACK)
-                    screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
-                    screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
-                    x_offset += text_surface.get_width()
+            line = self.lines[self.current_line]
+            if ": " in line:
+                speaker, text = line.split(": ", 1)
+                speaker_text = self.speaker_font.render(speaker + ": ", True, GOLD)
+                speaker_shadow = self.speaker_font.render(speaker + ": ", True, BLACK)
+                wrapped_lines = wrap_text(text, self.font, self.max_width - speaker_text.get_width())
+                screen.blit(speaker_shadow, (box_x + 12, box_y + 12))
+                screen.blit(speaker_text, (box_x + 10, box_y + 10))
+                for i, wrapped_line in enumerate(wrapped_lines):
+                    parts = wrapped_line.split()
+                    x_offset = speaker_text.get_width() + 10
+                    for part in parts:
+                        color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5", "T", "M", "E", "Q", "L", "V") else WHITE
+                        text_surface = self.font.render(part + " ", True, color)
+                        text_shadow = self.font.render(part + " ", True, BLACK)
+                        screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
+                        screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
+                        x_offset += text_surface.get_width()
+            else:
+                wrapped_lines = wrap_text(line, self.font, self.max_width)
+                for i, wrapped_line in enumerate(wrapped_lines):
+                    parts = wrapped_line.split()
+                    x_offset = 10
+                    for part in parts:
+                        color = GOLD if part in ("S", "R", "ESC", "Y", "N", "1", "2", "3", "4", "5", "T", "M", "E", "Q", "L", "V") else WHITE
+                        text_surface = self.font.render(part + " ", True, color)
+                        text_shadow = self.font.render(part + " ", True, BLACK)
+                        screen.blit(text_shadow, (box_x + x_offset + 2, box_y + 12 + i * 40))
+                        screen.blit(text_surface, (box_x + x_offset, box_y + 10 + i * 40))
+                        x_offset += text_surface.get_width()
 
-        # Render prompt externally
+        # Always draw ESC cue
+        esc_cue_text = self.prompt_font.render("ESC to Close/Skip", True, WHITE)
+        esc_cue_shadow = self.prompt_font.render("ESC to Close/Skip", True, BLACK)
+        # Position bottom-right, slightly offset from the box
+        esc_rect = esc_cue_text.get_rect(bottomright=(box_x + box_width - 5, box_y + box_height + 20))
+        screen.blit(esc_cue_shadow, (esc_rect.x + 1, esc_rect.y + 1))
+        screen.blit(esc_cue_text, esc_rect)
+
+        # Draw SPACE cue only if needed (multi-page dialogues)
         if self.show_prompt:
-            prompt_text = self.prompt_font.render("Press SPACE to continue, or ESC to skip", True, WHITE)
-            prompt_shadow = self.prompt_font.render("Press SPACE to continue, or ESC to skip", True, BLACK)
-            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
-            screen.blit(prompt_shadow, (prompt_rect.x + 2, prompt_rect.y + 2))
-            screen.blit(prompt_text, prompt_rect)
+            space_cue_text = self.prompt_font.render("SPACE to Continue", True, WHITE)
+            space_cue_shadow = self.prompt_font.render("SPACE to Continue", True, BLACK)
+            # Position bottom-left, slightly offset
+            space_rect = space_cue_text.get_rect(bottomleft=(box_x + 5, box_y + box_height + 20))
+            screen.blit(space_cue_shadow, (space_rect.x + 1, space_rect.y + 1))
+            screen.blit(space_cue_text, space_rect)
 
 def show_tutorial(screen, dialogue_box, ui_background):
     print("Showing tutorial...")
@@ -106,7 +133,7 @@ def show_tutorial(screen, dialogue_box, ui_background):
         "Reach the checkpoint or collect the fragment to progress.",
         "Move to exit to transition between scenes."
     ]
-    dialogue_box.show(tutorial_lines)
+    dialogue_box.show(tutorial_lines, show_prompt=True, context="default")
     while dialogue_box.active:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -119,6 +146,7 @@ def show_tutorial(screen, dialogue_box, ui_background):
                     dialogue_box.next_line()
                 elif event.key == pygame.K_ESCAPE:
                     dialogue_box.active = False
+                    break
 
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
@@ -126,38 +154,29 @@ def show_tutorial(screen, dialogue_box, ui_background):
 
 def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoints, music_volume, sfx_volume, vitalik_freed, choice_made, self_save_choice_made, vitalik, current_scene):
     print("Showing pause menu...")
-    options = ["Resume", "Tutorial", "Toggle Minimap", "Toggle Easy Mode", "Restart", "Adjust Sound", "Save Game", "Load Game", "Quit"]
-    settings_options = ["Toggle Easy Mode", "Back"]
-    restart_options = ["Restart from Checkpoint", "Restart Area", "Back"]
-    sound_options = ["Music Volume Up", "Music Volume Down", "SFX Volume Up", "SFX Volume Down", "Mute", "Back"]
+    options = [
+        "Resume (ESC)",
+        "Tutorial (T)",
+        "Toggle Minimap (M)",
+        "Toggle Easy Mode (E): " + ("Easy" if player.easy_mode else "Normal"),
+        "Restart (R)",
+        "Adjust Sound (V)",
+        "Save Game (S)",
+        "Load Game (L)",
+        "Quit (Q)"
+    ]
     selected = 0
-    in_settings = False
-    in_restart = False
-    in_sound = False
     running = True
     show_minimap = False
 
-    # Ensure dialogue box is not active to allow immediate navigation
-    dialogue_box.active = False
-
     while running:
-        current_options = options if not in_settings and not in_restart and not in_sound else \
-                          settings_options if in_settings else \
-                          restart_options if in_restart else sound_options
-
-        # Prepare the lines for display
         lines = []
-        if in_sound:
-            lines.append(f"Music Volume: {int(music_volume * 100)}%")
-            lines.append(f"SFX Volume: {int(sfx_volume * 100)}%")
-        for i, option in enumerate(current_options):
+        for i, option in enumerate(options):
             prefix = "> " if i == selected else "  "
-            if in_settings and option == "Toggle Easy Mode":
-                mode = "Easy" if player.easy_mode else "Normal"
-                lines.append(f"{prefix}Toggle Easy Mode: {mode}")
-            else:
-                lines.append(f"{prefix}{option}")
-        dialogue_box.show(lines, show_prompt=False)  # Show without prompt to avoid SPACE/ESC behavior
+            lines.append(f"{prefix}{option}")
+        lines.append("")
+        lines.append("Use UP/DOWN to navigate, ENTER to select, or press the trigger key")
+        dialogue_box.show(lines, show_prompt=False, context="menu")
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -166,108 +185,323 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 print(f"Key pressed in pause menu: {event.key}")
-                if event.key == pygame.K_ESCAPE:
-                    running = False  # Exit the pause menu to resume the game
-                elif event.key == pygame.K_UP:
-                    selected = (selected - 1) % len(current_options)
+                if event.key == pygame.K_UP:
+                    selected = (selected - 1) % len(options)
                 elif event.key == pygame.K_DOWN:
-                    selected = (selected + 1) % len(current_options)
+                    selected = (selected + 1) % len(options)
                 elif event.key == pygame.K_RETURN:
-                    if in_settings:
-                        if current_options[selected] == "Toggle Easy Mode":
-                            player.easy_mode = not player.easy_mode
-                            dialogue_box.show([f"Mode switched to {'Easy' if player.easy_mode else 'Normal'}!"])
-                        elif current_options[selected] == "Back":
-                            in_settings = False
-                            selected = 0
-                    elif in_restart:
-                        if current_options[selected] == "Restart from Checkpoint":
-                            checkpoints.load(player)
-                            running = False
-                        elif current_options[selected] == "Restart Area":
-                            world.current_scene = 0
-                            current_scene = world.get_current_scene()
-                            start_x, start_y = current_scene.maze.find_open_start_position()
-                            player.rect.x, player.rect.y = start_x, start_y
-                            player.hp = 100
-                            player.infection_level = 50
-                            if vitalik and vitalik.following:
-                                vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
-                            running = False
-                        elif current_options[selected] == "Back":
-                            in_restart = False
-                            selected = 0
-                    elif in_sound:
-                        if current_options[selected] == "Music Volume Up":
-                            music_volume = min(1.0, music_volume + 0.1)
-                            pygame.mixer.music.set_volume(music_volume)
-                        elif current_options[selected] == "Music Volume Down":
-                            music_volume = max(0.0, music_volume - 0.1)
-                            pygame.mixer.music.set_volume(music_volume)
-                        elif current_options[selected] == "SFX Volume Up":
-                            sfx_volume = min(1.0, sfx_volume + 0.1)
-                        elif current_options[selected] == "SFX Volume Down":
-                            sfx_volume = max(0.0, sfx_volume - 0.1)
-                        elif current_options[selected] == "Mute":
-                            music_volume = 0.0
-                            sfx_volume = 0.0
-                            pygame.mixer.music.set_volume(music_volume)
-                            dialogue_box.show(["Sound muted!"])
-                        elif current_options[selected] == "Back":
-                            in_sound = False
-                            selected = 0
+                    if options[selected].startswith("Resume"):
+                        running = False
+                    elif options[selected].startswith("Tutorial"):
+                        show_tutorial(screen, dialogue_box, ui_background)
+                    elif options[selected].startswith("Toggle Minimap"):
+                        show_minimap = not show_minimap
+                        dialogue_box.show([f"Minimap {'enabled' if show_minimap else 'disabled'}!"], context="default")
+                    elif options[selected].startswith("Toggle Easy Mode"):
+                        player.easy_mode = not player.easy_mode
+                        dialogue_box.show([f"Mode switched to {'Easy' if player.easy_mode else 'Normal'}!"], context="default")
+                    elif options[selected].startswith("Restart"):
+                        restart_options = ["Restart from Checkpoint", "Restart Area", "Back"]
+                        restart_selected = 0
+                        restart_running = True
+                        while restart_running:
+                            restart_lines = []
+                            for i, opt in enumerate(restart_options):
+                                prefix = "> " if i == restart_selected else "  "
+                                restart_lines.append(f"{prefix}{opt}")
+                            restart_lines.append("")
+                            restart_lines.append("Use UP/DOWN to navigate, ENTER to select, ESC to go back")
+                            dialogue_box.show(restart_lines, show_prompt=False, context="menu")
+                            for sub_event in pygame.event.get():
+                                if sub_event.type == pygame.QUIT:
+                                    pygame.quit()
+                                    sys.exit()
+                                if sub_event.type == pygame.KEYDOWN:
+                                    if sub_event.key == pygame.K_UP:
+                                        restart_selected = (restart_selected - 1) % len(restart_options)
+                                    elif sub_event.key == pygame.K_DOWN:
+                                        restart_selected = (restart_selected + 1) % len(restart_options)
+                                    elif sub_event.key == pygame.K_RETURN:
+                                        if restart_options[restart_selected] == "Restart from Checkpoint":
+                                            checkpoints.load(player)
+                                            running = False
+                                            restart_running = False
+                                        elif restart_options[restart_selected] == "Restart Area":
+                                            world.current_scene = 0
+                                            current_scene = world.get_current_scene()
+                                            start_x, start_y = current_scene.maze.find_open_start_position()
+                                            player.rect.x, player.rect.y = start_x, start_y
+                                            player.hp = 100
+                                            player.infection_level = 50
+                                            if vitalik and vitalik.following:
+                                                vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
+                                            running = False
+                                            restart_running = False
+                                        elif restart_options[restart_selected] == "Back":
+                                            restart_running = False
+                                    elif sub_event.key == pygame.K_ESCAPE:
+                                        restart_running = False
+                            screen.blit(ui_background, (0, 0))
+                            dialogue_box.draw(screen)
+                            pygame.display.flip()
+                    elif options[selected].startswith("Adjust Sound"):
+                        sound_options = [
+                            f"Music Volume Up (1): {int(music_volume * 100)}%",
+                            f"Music Volume Down (2): {int(music_volume * 100)}%",
+                            f"SFX Volume Up (3): {int(sfx_volume * 100)}%",
+                            f"SFX Volume Down (4): {int(sfx_volume * 100)}%",
+                            "Mute (5)",
+                            "Back"
+                        ]
+                        sound_selected = 0
+                        sound_running = True
+                        while sound_running:
+                            sound_lines = []
+                            for i, opt in enumerate(sound_options):
+                                prefix = "> " if i == sound_selected else "  "
+                                sound_lines.append(f"{prefix}{opt}")
+                            sound_lines.append("")
+                            sound_lines.append("Use UP/DOWN to navigate, ENTER to select, ESC to go back")
+                            dialogue_box.show(sound_lines, show_prompt=False, context="menu")
+                            for sub_event in pygame.event.get():
+                                if sub_event.type == pygame.QUIT:
+                                    pygame.quit()
+                                    sys.exit()
+                                if sub_event.type == pygame.KEYDOWN:
+                                    if sub_event.key == pygame.K_UP:
+                                        sound_selected = (sound_selected - 1) % len(sound_options)
+                                    elif sub_event.key == pygame.K_DOWN:
+                                        sound_selected = (sound_selected + 1) % len(sound_options)
+                                    elif sub_event.key == pygame.K_RETURN:
+                                        if sound_options[sound_selected].startswith("Music Volume Up"):
+                                            music_volume = min(1.0, music_volume + 0.1)
+                                            pygame.mixer.music.set_volume(music_volume)
+                                        elif sound_options[sound_selected].startswith("Music Volume Down"):
+                                            music_volume = max(0.0, music_volume - 0.1)
+                                            pygame.mixer.music.set_volume(music_volume)
+                                        elif sound_options[sound_selected].startswith("SFX Volume Up"):
+                                            sfx_volume = min(1.0, sfx_volume + 0.1)
+                                        elif sound_options[sound_selected].startswith("SFX Volume Down"):
+                                            sfx_volume = max(0.0, sfx_volume - 0.1)
+                                        elif sound_options[sound_selected].startswith("Mute"):
+                                            music_volume = 0.0
+                                            sfx_volume = 0.0
+                                            pygame.mixer.music.set_volume(music_volume)
+                                            dialogue_box.show(["Sound muted!"], context="default")
+                                        elif sound_options[sound_selected] == "Back":
+                                            sound_running = False
+                                    elif sub_event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5):
+                                        if sub_event.key == pygame.K_1:
+                                            music_volume = min(1.0, music_volume + 0.1)
+                                            pygame.mixer.music.set_volume(music_volume)
+                                        elif sub_event.key == pygame.K_2:
+                                            music_volume = max(0.0, music_volume - 0.1)
+                                            pygame.mixer.music.set_volume(music_volume)
+                                        elif sub_event.key == pygame.K_3:
+                                            sfx_volume = min(1.0, sfx_volume + 0.1)
+                                        elif sub_event.key == pygame.K_4:
+                                            sfx_volume = max(0.0, sfx_volume - 0.1)
+                                        elif sub_event.key == pygame.K_5:
+                                            music_volume = 0.0
+                                            sfx_volume = 0.0
+                                            pygame.mixer.music.set_volume(music_volume)
+                                            dialogue_box.show(["Sound muted!"], context="default")
+                                    elif sub_event.key == pygame.K_ESCAPE:
+                                        sound_running = False
+                            screen.blit(ui_background, (0, 0))
+                            dialogue_box.draw(screen)
+                            pygame.display.flip()
+                    elif options[selected].startswith("Save Game"):
+                        save_game(player, world, vitalik_freed, choice_made, self_save_choice_made, vitalik)
+                        dialogue_box.show(["Game saved successfully!"], context="default")
+                    elif options[selected].startswith("Load Game"):
+                        game_state = load_game()
+                        if game_state:
+                            player.rect.x, player.rect.y = game_state['player']['rect']
+                            player.hp = game_state['player']['hp']
+                            player.infection_level = game_state['player']['infection_level']
+                            player.attack_power = game_state['player']['attack_power']
+                            player.ranged_attacks = game_state['player']['ranged_attacks']
+                            player.optimism_ring_duration = game_state['player']['optimism_ring_duration']
+                            player.optimism_ring_timer = game_state['player']['optimism_ring_timer']
+                            player.easy_mode = game_state['player']['easy_mode']
+                            player.inventory.supercollateral = game_state['player']['inventory']['supercollateral']
+                            player.inventory.fragments = game_state['player']['inventory']['fragments']
+                            player.inventory.has_sword = game_state['player']['inventory']['has_sword']
+                            world.current_area = game_state['world']['current_area']
+                            world.current_scene = game_state['world']['current_scene']
+                            vitalik_freed = game_state['vitalik_freed']
+                            choice_made = game_state['choice_made']
+                            self_save_choice_made = game_state['self_save_choice_made']
+                            if game_state['vitalik']['rect']:
+                                vitalik = NPC(current_scene, is_vitalik=True)
+                                vitalik.is_freed = game_state['vitalik']['is_freed']
+                                vitalik.following = game_state['vitalik']['following']
+                                vitalik.invulnerable = game_state['vitalik']['invulnerable']
+                                vitalik.rect.x, vitalik.rect.y = game_state['vitalik']['rect']
+                                current_scene.npc = vitalik
+                            dialogue_box.show(["Game loaded successfully!"], context="default")
+                        else:
+                            dialogue_box.show(["No saved game found!"], context="default")
+                    elif options[selected].startswith("Quit"):
+                        pygame.quit()
+                        sys.exit()
+                elif event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.key == pygame.K_t:
+                    show_tutorial(screen, dialogue_box, ui_background)
+                elif event.key == pygame.K_m:
+                    show_minimap = not show_minimap
+                    dialogue_box.show([f"Minimap {'enabled' if show_minimap else 'disabled'}!"], context="default")
+                elif event.key == pygame.K_e:
+                    player.easy_mode = not player.easy_mode
+                    dialogue_box.show([f"Mode switched to {'Easy' if player.easy_mode else 'Normal'}!"], context="default")
+                elif event.key == pygame.K_r:
+                    restart_options = ["Restart from Checkpoint", "Restart Area", "Back"]
+                    restart_selected = 0
+                    restart_running = True
+                    while restart_running:
+                        restart_lines = []
+                        for i, opt in enumerate(restart_options):
+                            prefix = "> " if i == restart_selected else "  "
+                            restart_lines.append(f"{prefix}{opt}")
+                        restart_lines.append("")
+                        restart_lines.append("Use UP/DOWN to navigate, ENTER to select, ESC to go back")
+                        dialogue_box.show(restart_lines, show_prompt=False, context="menu")
+                        for sub_event in pygame.event.get():
+                            if sub_event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            if sub_event.type == pygame.KEYDOWN:
+                                if sub_event.key == pygame.K_UP:
+                                    restart_selected = (restart_selected - 1) % len(restart_options)
+                                elif sub_event.key == pygame.K_DOWN:
+                                    restart_selected = (restart_selected + 1) % len(restart_options)
+                                elif sub_event.key == pygame.K_RETURN:
+                                    if restart_options[restart_selected] == "Restart from Checkpoint":
+                                        checkpoints.load(player)
+                                        running = False
+                                        restart_running = False
+                                    elif restart_options[restart_selected] == "Restart Area":
+                                        world.current_scene = 0
+                                        current_scene = world.get_current_scene()
+                                        start_x, start_y = current_scene.maze.find_open_start_position()
+                                        player.rect.x, player.rect.y = start_x, start_y
+                                        player.hp = 100
+                                        player.infection_level = 50
+                                        if vitalik and vitalik.following:
+                                            vitalik.rect.x, vitalik.rect.y = start_x + TILE_SIZE, start_y
+                                        running = False
+                                        restart_running = False
+                                    elif restart_options[restart_selected] == "Back":
+                                        restart_running = False
+                                elif sub_event.key == pygame.K_ESCAPE:
+                                    restart_running = False
+                        screen.blit(ui_background, (0, 0))
+                        dialogue_box.draw(screen)
+                        pygame.display.flip()
+                elif event.key == pygame.K_v and options[selected].startswith("Adjust Sound"):
+                    sound_options = [
+                        f"Music Volume Up (1): {int(music_volume * 100)}%",
+                        f"Music Volume Down (2): {int(music_volume * 100)}%",
+                        f"SFX Volume Up (3): {int(sfx_volume * 100)}%",
+                        f"SFX Volume Down (4): {int(sfx_volume * 100)}%",
+                        "Mute (5)",
+                        "Back"
+                    ]
+                    sound_selected = 0
+                    sound_running = True
+                    while sound_running:
+                        sound_lines = []
+                        for i, opt in enumerate(sound_options):
+                            prefix = "> " if i == sound_selected else "  "
+                            sound_lines.append(f"{prefix}{opt}")
+                        sound_lines.append("")
+                        sound_lines.append("Use UP/DOWN to navigate, ENTER to select, ESC to go back")
+                        dialogue_box.show(sound_lines, show_prompt=False, context="menu")
+                        for sub_event in pygame.event.get():
+                            if sub_event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            if sub_event.type == pygame.KEYDOWN:
+                                if sub_event.key == pygame.K_UP:
+                                    sound_selected = (sound_selected - 1) % len(sound_options)
+                                elif sub_event.key == pygame.K_DOWN:
+                                    sound_selected = (sound_selected + 1) % len(sound_options)
+                                elif sub_event.key == pygame.K_RETURN:
+                                    if sound_options[sound_selected].startswith("Music Volume Up"):
+                                        music_volume = min(1.0, music_volume + 0.1)
+                                        pygame.mixer.music.set_volume(music_volume)
+                                    elif sound_options[sound_selected].startswith("Music Volume Down"):
+                                        music_volume = max(0.0, music_volume - 0.1)
+                                        pygame.mixer.music.set_volume(music_volume)
+                                    elif sound_options[sound_selected].startswith("SFX Volume Up"):
+                                        sfx_volume = min(1.0, sfx_volume + 0.1)
+                                    elif sound_options[sound_selected].startswith("SFX Volume Down"):
+                                        sfx_volume = max(0.0, sfx_volume - 0.1)
+                                    elif sound_options[sound_selected].startswith("Mute"):
+                                        music_volume = 0.0
+                                        sfx_volume = 0.0
+                                        pygame.mixer.music.set_volume(music_volume)
+                                        dialogue_box.show(["Sound muted!"], context="default")
+                                    elif sound_options[sound_selected] == "Back":
+                                        sound_running = False
+                                elif sub_event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5):
+                                    if sub_event.key == pygame.K_1:
+                                        music_volume = min(1.0, music_volume + 0.1)
+                                        pygame.mixer.music.set_volume(music_volume)
+                                    elif sub_event.key == pygame.K_2:
+                                        music_volume = max(0.0, music_volume - 0.1)
+                                        pygame.mixer.music.set_volume(music_volume)
+                                    elif sub_event.key == pygame.K_3:
+                                        sfx_volume = min(1.0, sfx_volume + 0.1)
+                                    elif sub_event.key == pygame.K_4:
+                                        sfx_volume = max(0.0, sfx_volume - 0.1)
+                                    elif sub_event.key == pygame.K_5:
+                                        music_volume = 0.0
+                                        sfx_volume = 0.0
+                                        pygame.mixer.music.set_volume(music_volume)
+                                        dialogue_box.show(["Sound muted!"], context="default")
+                                elif sub_event.key == pygame.K_ESCAPE:
+                                    sound_running = False
+                        screen.blit(ui_background, (0, 0))
+                        dialogue_box.draw(screen)
+                        pygame.display.flip()
+                elif event.key == pygame.K_s and options[selected].startswith("Save Game"):
+                    save_game(player, world, vitalik_freed, choice_made, self_save_choice_made, vitalik)
+                    dialogue_box.show(["Game saved successfully!"], context="default")
+                elif event.key == pygame.K_l:
+                    game_state = load_game()
+                    if game_state:
+                        player.rect.x, player.rect.y = game_state['player']['rect']
+                        player.hp = game_state['player']['hp']
+                        player.infection_level = game_state['player']['infection_level']
+                        player.attack_power = game_state['player']['attack_power']
+                        player.ranged_attacks = game_state['player']['ranged_attacks']
+                        player.optimism_ring_duration = game_state['player']['optimism_ring_duration']
+                        player.optimism_ring_timer = game_state['player']['optimism_ring_timer']
+                        player.easy_mode = game_state['player']['easy_mode']
+                        player.inventory.supercollateral = game_state['player']['inventory']['supercollateral']
+                        player.inventory.fragments = game_state['player']['inventory']['fragments']
+                        player.inventory.has_sword = game_state['player']['inventory']['has_sword']
+                        world.current_area = game_state['world']['current_area']
+                        world.current_scene = game_state['world']['current_scene']
+                        vitalik_freed = game_state['vitalik_freed']
+                        choice_made = game_state['choice_made']
+                        self_save_choice_made = game_state['self_save_choice_made']
+                        if game_state['vitalik']['rect']:
+                            vitalik = NPC(current_scene, is_vitalik=True)
+                            vitalik.is_freed = game_state['vitalik']['is_freed']
+                            vitalik.following = game_state['vitalik']['following']
+                            vitalik.invulnerable = game_state['vitalik']['invulnerable']
+                            vitalik.rect.x, vitalik.rect.y = game_state['vitalik']['rect']
+                            current_scene.npc = vitalik
+                        dialogue_box.show(["Game loaded successfully!"], context="default")
                     else:
-                        if current_options[selected] == "Resume":
-                            running = False
-                        elif current_options[selected] == "Tutorial":
-                            show_tutorial(screen, dialogue_box, ui_background)
-                        elif current_options[selected] == "Toggle Minimap":
-                            show_minimap = not show_minimap
-                            dialogue_box.show([f"Minimap {'enabled' if show_minimap else 'disabled'}!"])
-                        elif current_options[selected] == "Toggle Easy Mode":
-                            in_settings = True
-                            selected = 0
-                        elif current_options[selected] == "Restart":
-                            in_restart = True
-                            selected = 0
-                        elif current_options[selected] == "Adjust Sound":
-                            in_sound = True
-                            selected = 0
-                        elif current_options[selected] == "Save Game":
-                            save_game(player, world, vitalik_freed, choice_made, self_save_choice_made, vitalik)
-                            dialogue_box.show(["Game saved successfully!"])
-                        elif current_options[selected] == "Load Game":
-                            game_state = load_game()
-                            if game_state:
-                                player.rect.x, player.rect.y = game_state['player']['rect']
-                                player.hp = game_state['player']['hp']
-                                player.infection_level = game_state['player']['infection_level']
-                                player.attack_power = game_state['player']['attack_power']
-                                player.ranged_attacks = game_state['player']['ranged_attacks']
-                                player.optimism_ring_duration = game_state['player']['optimism_ring_duration']
-                                player.optimism_ring_timer = game_state['player']['optimism_ring_timer']
-                                player.easy_mode = game_state['player']['easy_mode']
-                                player.inventory.supercollateral = game_state['player']['inventory']['supercollateral']
-                                player.inventory.fragments = game_state['player']['inventory']['fragments']
-                                player.inventory.has_sword = game_state['player']['inventory']['has_sword']
-                                world.current_area = game_state['world']['current_area']
-                                world.current_scene = game_state['world']['current_scene']
-                                vitalik_freed = game_state['vitalik_freed']
-                                choice_made = game_state['choice_made']
-                                self_save_choice_made = game_state['self_save_choice_made']
-                                if game_state['vitalik']['rect']:
-                                    vitalik = NPC(current_scene, is_vitalik=True)
-                                    vitalik.is_freed = game_state['vitalik']['is_freed']
-                                    vitalik.following = game_state['vitalik']['following']
-                                    vitalik.invulnerable = game_state['vitalik']['invulnerable']
-                                    vitalik.rect.x, vitalik.rect.y = game_state['vitalik']['rect']
-                                    current_scene.npc = vitalik
-                                dialogue_box.show(["Game loaded successfully!"])
-                            else:
-                                dialogue_box.show(["No saved game found!"])
-                        elif current_options[selected] == "Quit":
-                            pygame.quit()
-                            sys.exit()
+                        dialogue_box.show(["No saved game found!"], context="default")
+                elif event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
 
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
@@ -277,12 +511,8 @@ def show_pause_menu(screen, player, dialogue_box, ui_background, world, checkpoi
 
 def prompt_easy_mode(screen, dialogue_box, player, ui_background):
     print("Prompting easy mode switch...")
-    dialogue_box.show(["You've lost 3 times in a row...switch to easy mode? Press Y/N to decide."], show_prompt=False)
+    dialogue_box.show(["You've lost 3 times in a row...switch to easy mode? Press Y/N to decide."], show_prompt=True, context="default")
     choice_made = False
-    prompt_font = pygame.font.SysFont(DEFAULT_FONT, 20)
-    prompt_text = prompt_font.render("Press Y/N to decide", True, WHITE)
-    prompt_shadow = prompt_font.render("Press Y/N to decide", True, BLACK)
-    prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
 
     while not choice_made:
         for event in pygame.event.get():
@@ -295,20 +525,21 @@ def prompt_easy_mode(screen, dialogue_box, player, ui_background):
                 if event.key == pygame.K_y:
                     player.easy_mode = True
                     choice_made = True
-                    dialogue_box.show(["Switched to Easy Mode!"])
+                    dialogue_box.show(["Switched to Easy Mode!"], context="default")
                 elif event.key == pygame.K_n:
                     choice_made = True
-                    dialogue_box.show(["Continuing in Normal Mode."])
+                    dialogue_box.show(["Continuing in Normal Mode."], context="default")
+                elif event.key == pygame.K_ESCAPE:
+                    choice_made = True
+                    dialogue_box.show(["Continuing in Normal Mode."], context="default")
+                    break
 
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
-        screen.blit(prompt_shadow, (prompt_rect.x + 2, prompt_rect.y + 2))
-        screen.blit(prompt_text, prompt_rect)
         pygame.display.flip()
 
 def prompt_game_over(screen, dialogue_box, player, world, checkpoints, ui_background):
     print("Prompting game over...")
-    # Switch to cutscene music for game over
     pygame.mixer.music.stop()
     try:
         pygame.mixer.music.load(SOUND_CUTSCENE_MUSIC)
@@ -319,14 +550,9 @@ def prompt_game_over(screen, dialogue_box, player, world, checkpoints, ui_backgr
 
     has_checkpoint = checkpoints.has_checkpoint()
     message = ["Vitalik: Infection has taken over! Choose an option:"]
-    dialogue_box.show(message, show_prompt=False)
+    dialogue_box.show(message, show_prompt=True, context="default")
     choice_made = False
     choice = None
-
-    prompt_font = pygame.font.SysFont(DEFAULT_FONT, 20)
-    prompt_text = prompt_font.render(f"S: Start Over | R: Restart from Checkpoint{' (Available)' if has_checkpoint else ''} | A: Restart Area | ESC: Quit", True, WHITE)
-    prompt_shadow = prompt_font.render(f"S: Start Over | R: Restart from Checkpoint{' (Available)' if has_checkpoint else ''} | A: Restart Area | ESC: Quit", True, BLACK)
-    prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
 
     while not choice_made:
         for event in pygame.event.get():
@@ -349,18 +575,17 @@ def prompt_game_over(screen, dialogue_box, player, world, checkpoints, ui_backgr
                     print("Game over prompt closed by user.")
                     pygame.quit()
                     sys.exit()
+                elif event.key == pygame.K_SPACE:
+                    dialogue_box.next_line()
 
         screen.blit(ui_background, (0, 0))
         dialogue_box.draw(screen)
-        screen.blit(prompt_shadow, (prompt_rect.x + 2, prompt_rect.y + 2))
-        screen.blit(prompt_text, prompt_rect)
         pygame.display.flip()
 
     dialogue_box.active = False
     dialogue_box.lines = []
     dialogue_box.current_line = 0
 
-    # Restore game music after game over prompt
     pygame.mixer.music.stop()
     try:
         pygame.mixer.music.load(SOUND_GAME_MUSIC)

@@ -33,6 +33,7 @@ class Player:
             self.easy_mode = False
             self.shake_timer = 0  # For hit indication
             self.shake_offset = (0, 0)  # Offset for shaking
+            self.world_choice_made = False  # Track if the player chose the "world" path
 
             # Load Optimism Ring effect sprite
             self.optimism_ring_sprite = None

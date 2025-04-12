@@ -145,29 +145,6 @@ def draw_exits(screen, scene, font, exit_arrow_sprite):
     entry_x, entry_y = scene.entry
     exit_x, exit_y = scene.exit
 
-    if "west" in scene.exits:
-        if entry_x == 0:  # Left side
-            if exit_arrow_sprite:
-                screen.blit(exit_arrow_sprite, (10, (entry_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT - 15))
-            else:
-                pygame.draw.polygon(screen, WHITE, [(10, (entry_y * TILE_SIZE + TILE_SIZE + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT), (30, (entry_y * TILE_SIZE + TILE_SIZE + 10 + 20) + HUD_HEIGHT)])
-            exit_text = font.render("Previous Scene", True, WHITE)
-            screen.blit(exit_text, (40, (entry_y * TILE_SIZE + TILE_SIZE - 10 + 20) + HUD_HEIGHT))
-        elif entry_y == 0:  # Top side
-            if exit_arrow_sprite:
-                screen.blit(pygame.transform.rotate(exit_arrow_sprite, 90), (entry_x * TILE_SIZE + TILE_SIZE - 15, HUD_HEIGHT + 20))
-            else:
-                pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, HUD_HEIGHT + 20), (entry_x * TILE_SIZE + TILE_SIZE - 10, HUD_HEIGHT + 40), (entry_x * TILE_SIZE + TILE_SIZE + 10, HUD_HEIGHT + 40)])
-            exit_text = font.render("Previous Scene", True, WHITE)
-            screen.blit(exit_text, (entry_x * TILE_SIZE + TILE_SIZE - 40, HUD_HEIGHT + 30))
-        else:  # Bottom side
-            if exit_arrow_sprite:
-                screen.blit(pygame.transform.rotate(exit_arrow_sprite, -90), (entry_x * TILE_SIZE + TILE_SIZE - 15, SCREEN_HEIGHT - 70))
-            else:
-                pygame.draw.polygon(screen, WHITE, [(entry_x * TILE_SIZE + TILE_SIZE, SCREEN_HEIGHT - 50), (entry_x * TILE_SIZE + TILE_SIZE - 10, SCREEN_HEIGHT - 70), (entry_x * TILE_SIZE + TILE_SIZE + 10, SCREEN_HEIGHT - 70)])
-            exit_text = font.render("Previous Scene", True, WHITE)
-            screen.blit(exit_text, (entry_x * TILE_SIZE + TILE_SIZE - 40, SCREEN_HEIGHT - 60))
-
     if "east" in scene.exits:
         if exit_x == MAZE_WIDTH - 1:  # Right side
             if exit_arrow_sprite:
