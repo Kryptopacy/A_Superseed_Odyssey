@@ -47,12 +47,6 @@ A Superseed Odyssey: Rise of the Sapa Slayer is a 2D maze-based adventure game b
 - Complete optional minigames from random quest NPCs for rewards.
 - Defeat the final boss, Skuld, to restore the Superseed and save Krypto.
 
-## Development
-### Adding New Assets
-- Floor/Wall Tiles: Place individual 32x32 PNGs for floors and walls in assets/images/ (e.g., area_0_floor.png, area_0_wall.png). They will be auto-scaled to 40x40 pixels.
-- Sprites: Add sprites for enemies, sword, attack visualizations, tokens, checkpoints, and fragments in assets/sprites/. They will be auto-scaled to 40x40 pixels.
-- Backgrounds: Add area-specific backgrounds in assets/images/backgrounds/.
-- Sounds: Add sound effects and music in assets/sounds/.
 
 ## Fallbacks
 
